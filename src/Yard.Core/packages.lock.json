@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "CliWrap": {
+        "type": "Direct",
+        "requested": "[3.10.5, )",
+        "resolved": "3.10.5",
+        "contentHash": "L5SghZThsAVhV8ucwwW5FLMzKj1Ps57JB8DM2bEjpBNTyGi1EDjDO7Mi39Yx1FoXM2fZ1l9j39xqlPsZI1QCJQ=="
+      }
+    }
+  }
+}

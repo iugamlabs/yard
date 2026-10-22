@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><PackageId>Iugam.Yard.Core</PackageId></PropertyGroup><ItemGroup><PackageReference Include="CliWrap"/></ItemGroup><ItemGroup>
+<EmbeddedResource Include="../../templates/monorepo/global.json" LogicalName="Yard.Managed/global.json"/>
+<EmbeddedResource Include="../../templates/monorepo/.editorconfig" LogicalName="Yard.Managed/.editorconfig"/>
+<EmbeddedResource Include="../../templates/monorepo/Directory.Build.props" LogicalName="Yard.Managed/Directory.Build.props"/>
+<EmbeddedResource Include="../../templates/monorepo/.prettierrc.json" LogicalName="Yard.Managed/.prettierrc.json"/>
+<EmbeddedResource Include="../../templates/monorepo/.prettierignore" LogicalName="Yard.Managed/.prettierignore"/>
+<EmbeddedResource Include="../../templates/monorepo/eslint.config.js" LogicalName="Yard.Managed/eslint.config.js"/>
+</ItemGroup></Project>
