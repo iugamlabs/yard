@@ -1,0 +1,54 @@
+name: yard-check
+on: [push, pull_request]
+jobs:
+  unit:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: dotnet tool restore
+      - run: dotnet restore Yard.slnx --locked-mode
+      - run: dotnet build Yard.slnx --no-restore
+      - run: dotnet test tests/Yard.Tests --no-build
+      - run: python scripts/format_csharp.py --check
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.18.0'
+      - run: npm install -g pnpm@12.11.2
+      - run: python3 scripts/pack.py
+      - run: dotnet tool install Iugam.Yard.Cli --version 0.1.0 --tool-path .temp/tools --add-source .temp/feed
+      - run: python3 scripts/acceptance.py --tool .temp/tools/yard --database sqlite
+      - run: python3 scripts/acceptance.py --tool .temp/tools/yard --database postgresql --multi
+      - run: python3 scripts/process_acceptance.py --tool .temp/tools/yard
+      - name: Verify native dotnet template
+        run: |
+          dotnet new install "$PWD/.temp/feed/Iugam.Yard.Templates.0.1.0.nupkg" --debug:custom-hive "$PWD/.temp/template-hive"
+          dotnet new yard-mono -n NativeExample --database sqlite -o .temp/native --debug:custom-hive "$PWD/.temp/template-hive"
+          cd .temp/native
+          ../tools/yard init
+          ../tools/yard check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: yard-local-artifacts
+          path: |
+            .temp/feed/*.nupkg
+            .temp/acceptance/*/results.json
+            .temp/acceptance/*/logs/*.log
+            .temp/process-acceptance/*/results.json
+            .temp/process-acceptance/*/*.log

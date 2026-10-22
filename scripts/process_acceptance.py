@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""Installed-tool checkout, cookie, port and Ctrl+C acceptance (POSIX host)."""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import signal
+import socket
+import subprocess
+import time
+import urllib.request
+import uuid
+
+ROOT = Path(__file__).resolve().parents[1]
+p = argparse.ArgumentParser(description=__doc__)
+p.add_argument('--tool', type=Path, required=True)
+args = p.parse_args()
+tool = args.tool.resolve()
+case = ROOT / '.temp/process-acceptance' / uuid.uuid4().hex[:8]
+case.mkdir(parents=True)
+checks = []
+hosts = []
+streams = []
+completed = False
+
+def record(name, condition):
+    checks.append({'name': name, 'passed': bool(condition)})
+    print(name + (': PASS' if condition else ': FAIL'), flush=True)
+    assert condition, name
+
+def run(name, app, *argv, input=None, expected=0, env=None):
+    with (case / (name + '.log')).open('w') as output:
+        r = subprocess.run([str(tool), *argv], cwd=app, input=input, text=True,
+                           stdout=output, stderr=subprocess.STDOUT, timeout=300, env=env)
+    record(name, r.returncode == expected)
+
+def port():
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
+def closed(number):
+    with socket.socket() as s:
+        return s.connect_ex(('127.0.0.1', number)) != 0
+
+def ready(url, proc):
+    for _ in range(180):
+        if proc.poll() is not None:
+            raise RuntimeError('Host exited before readiness')
+        try:
+            if urllib.request.urlopen(url + '/health/ready', timeout=1).status == 200:
+                return
+        except Exception:
+            pass
+        time.sleep(.5)
+    raise TimeoutError(url)
+
+try:
+    apps = [case / 'a', case / 'b']
+    for i, app in enumerate(apps):
+        run('new-' + str(i), ROOT, 'new', 'ParallelProject', '--database', 'sqlite', '--output', str(app))
+        run('init-' + str(i), app, 'init')
+        run('bootstrap-' + str(i), app, 'user', 'bootstrap', 'owner' + str(i), '--password-stdin', input='Parallel-password-123\n')
+    settings = [json.loads((a / '.yard/settings.json').read_text()) for a in apps]
+    record('separate-identities', settings[0]['identity'] != settings[1]['identity'])
+    record('separate-databases', settings[0]['connections']['api'] != settings[1]['connections']['api'])
+    with socket.socket() as occupied:
+        occupied.bind(('127.0.0.1', 0))
+        occupied.listen()
+        env = dict(os.environ, YARD_PORT=str(occupied.getsockname()[1]))
+        run('port-conflict', apps[0], 'dev', expected=1, env=env)
+        record('clear-port-diagnostic', 'already in use' in (case / 'port-conflict.log').read_text())
+    gateway_ports = [port(), port()]
+    lock_hashes = [hashlib.sha256((a / 'pnpm-lock.yaml').read_bytes()).digest() for a in apps]
+    for i, app in enumerate(apps):
+        output = (case / ('dev-' + str(i) + '.log')).open('w')
+        streams.append(output)
+        host = subprocess.Popen([str(tool), 'dev'], cwd=app, stdout=output, stderr=subprocess.STDOUT,
+                                env=dict(os.environ, YARD_PORT=str(gateway_ports[i]), DOCKER_HOST='tcp://127.0.0.1:1'), start_new_session=True)
+        hosts.append(host)
+    urls = ['http://localhost:' + str(x) for x in gateway_ports]
+    for url, host in zip(urls, hosts):
+        ready(url, host)
+    record('parallel-ready', True)
+    js = apps[0] / '.yard/cookie-check.mjs'
+    js.write_text('''import { chromium } from '@playwright/test';
+import { spawnSync } from 'node:child_process';
+const [a,b,tool,root]=process.argv.slice(2);
+const browser=await chromium.launch({headless:true});
+try {
+ const context=await browser.newContext(); const pages=[await context.newPage(),await context.newPage()];
+ for(let i=0;i<2;i++) {
+  await pages[i].goto([a,b][i]+'/login');
+  const result=await pages[i].evaluate(async i=>{
+   const {token}=await (await fetch('/api/auth/csrf')).json();
+   return (await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':token},body:JSON.stringify({identifier:'owner'+i,password:'Parallel-password-123'})})).status;
+  },i);
+  if(result!==200) throw Error('login failed '+result);
+ }
+ for(let i=0;i<2;i++) {
+  const user=await pages[i].evaluate(async()=> (await fetch('/api/auth/me')).json());
+  if(user.username!=='owner'+i) throw Error('cookie crossed checkout boundary');
+ }
+ const stop=spawnSync(tool,['dev','stop'],{cwd:root,encoding:'utf8',timeout:45000});
+ if(stop.status!==0) throw Error(stop.stderr);
+ const user=await pages[1].evaluate(async()=> (await fetch('/api/auth/me')).json());
+ if(user.username!=='owner1') throw Error('independent stop disrupted second checkout');
+ console.log('Shared browser cookies and independent stop passed');
+} finally {await browser.close();}
+''')
+    with (case / 'cookie-check.log').open('w') as output:
+        r = subprocess.run(['node', str(js), *urls, str(tool), str(apps[0])], cwd=apps[0], stdout=output, stderr=subprocess.STDOUT, timeout=90)
+    record('browser-cookie-isolation-and-independent-stop', r.returncode == 0)
+    hosts[0].wait(timeout=30)
+    record('second-checkout-survives', hosts[1].poll() is None)
+    os.killpg(hosts[1].pid, signal.SIGINT)
+    hosts[1].wait(timeout=30)
+    record('ctrl-c-exit', hosts[1].returncode in (0, 130))
+    time.sleep(1)
+    for i, state in enumerate(settings):
+        remaining = [n for n in [*state['ports'].values(), state['controlPort'], gateway_ports[i]] if not closed(n)]
+        if remaining:
+            print('Remaining listeners: ' + str(remaining), flush=True)
+        record('no-listeners-' + str(i), not remaining)
+        record('unchanged-lock-' + str(i), hashlib.sha256((apps[i] / 'pnpm-lock.yaml').read_bytes()).digest() == lock_hashes[i])
+    output = (case / 'selected-api.log').open('w')
+    streams.append(output)
+    host = subprocess.Popen([str(tool), 'dev', '--app', 'api'], cwd=apps[0], stdout=output, stderr=subprocess.STDOUT,
+                            env=dict(os.environ, YARD_PORT=str(gateway_ports[0]), DOCKER_HOST='tcp://127.0.0.1:1'), start_new_session=True)
+    hosts.append(host)
+    ready(urls[0], host)
+    status = subprocess.run([str(tool), 'dev', 'status'], cwd=apps[0], capture_output=True, text=True, check=True, timeout=30)
+    names = {x['name'] for x in json.loads(status.stdout)['applications']}
+    record('selected-api-excludes-frontend', 'api' in names and 'web' not in names)
+    run('selected-api-stop', apps[0], 'dev', 'stop')
+    host.wait(timeout=30)
+    record('sqlite-with-unavailable-docker', all(closed(n) for n in [*settings[0]['ports'].values(), settings[0]['controlPort'], gateway_ports[0]]))
+    completed = True
+finally:
+    for host in hosts:
+        if host.poll() is None:
+            os.killpg(host.pid, signal.SIGTERM)
+            try:
+                host.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                os.killpg(host.pid, signal.SIGKILL)
+    for stream in streams:
+        stream.close()
+    (case / 'results.json').write_text(json.dumps({'checks':checks,'passed':completed and bool(checks) and all(x['passed'] for x in checks)},indent=2)+'\n')
+    print('Process acceptance record: ' + str(case / 'results.json'), flush=True)
