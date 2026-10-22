@@ -1,0 +1,3 @@
+# Yard-generated application
+
+Read yard.json and README.md first. Yard owns the application layout and managed tool configuration. Use yard add to create applications, yard sync to update managed files and yard check before delivery. Do not add Taskfile or Procfile. Production source for each backend stays in its single API project, organized by Modules, Infrastructure and Hosting. Tenant entities implement IOrganizationEntity and operations require explicit organization context. Never write balances or other business invariants through unrelated modules. Use yard fmt for complete C# and frontend formatting. Keep .yard and private configuration untracked.

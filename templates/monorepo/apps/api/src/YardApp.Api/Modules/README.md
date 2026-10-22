@@ -1,0 +1,1 @@
+Business modules own their endpoints, contracts, operations, entities and mappings here. Register permissions through IYardPermissionProvider. Tenant entities implement IOrganizationEntity. Authorize each organization request with OrganizationOperations.Require before querying or writing. Never bypass Yard isolation for customer requests.

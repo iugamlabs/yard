@@ -1,0 +1,59 @@
+@import 'tailwindcss' source(none);
+@import './sources.css';
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--secondary);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: white;
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+  --radius-md: 0.6rem;
+  --radius-lg: 0.8rem;
+  --radius-sm: 0.4rem;
+}
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  --background: #f7f8fa;
+  --foreground: #17212e;
+  --card: #fff;
+  --primary: #254f41;
+  --primary-foreground: #fff;
+  --secondary: #e9eef0;
+  --muted: #f0f2f4;
+  --muted-foreground: #586679;
+  --destructive: #bc3434;
+  --border: #dce2e7;
+}
+* {
+  border-color: var(--border);
+}
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+button,
+a,
+input {
+  touch-action: manipulation;
+}
+a {
+  color: var(--primary);
+}
+button {
+  cursor: pointer;
+}
+input[type='checkbox'] {
+  accent-color: var(--primary);
+}

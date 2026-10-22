@@ -1,0 +1,4 @@
+.yard/
+**/dist/
+**/generated.ts
+pnpm-lock.yaml

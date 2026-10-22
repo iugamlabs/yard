@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Iugam",
+  "classifications": [
+    "Yard",
+    "Monorepo"
+  ],
+  "identity": "Iugam.Yard.Monorepo",
+  "name": "Yard standard monorepo",
+  "shortName": "yard-mono",
+  "sourceName": "YardApp",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "solution"
+  },
+  "symbols": {
+    "database": {
+      "type": "parameter",
+      "datatype": "choice",
+      "choices": [
+        {
+          "choice": "postgresql"
+        },
+        {
+          "choice": "sqlite"
+        }
+      ],
+      "defaultValue": "postgresql",
+      "replaces": "__DATABASE__"
+    },
+    "packageName": {
+      "type": "generated",
+      "generator": "casing",
+      "parameters": {
+        "source": "name",
+        "toLower": true
+      },
+      "replaces": "yardapp"
+    }
+  },
+  "sources": [
+    {
+      "exclude": [
+        "**/bin/**",
+        "**/obj/**",
+        "**/node_modules/**",
+        ".template.config/**",
+        "**/.DS_Store"
+      ]
+    }
+  ]
+}
