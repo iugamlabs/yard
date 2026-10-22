@@ -1,0 +1,136 @@
+{
+  "version": "0.1.0",
+  "schemaVersion": 1,
+  "date": "2026-10-22",
+  "platform": "Linux",
+  "tool": ".temp/tools/yard",
+  "sdk": "10.0.400",
+  "node": "24.18.0",
+  "pnpm": "12.11.2",
+  "postgresql": "18.6",
+  "packages": [
+    {
+      "file": ".temp/feed/Iugam.Yard.AspNetCore.0.1.0.nupkg",
+      "bytes": 115208,
+      "sha256": "bad03d135773834972016f82ec22eeb8d0877d20b159fb69c7fac1394675e43c"
+    },
+    {
+      "file": ".temp/feed/Iugam.Yard.Cli.0.1.0.nupkg",
+      "bytes": 3965468,
+      "sha256": "d165f55efbf11a5e25660f1930ca2f3a4451990f6ebe79ec65cbed38cab9fb09"
+    },
+    {
+      "file": ".temp/feed/Iugam.Yard.Core.0.1.0.nupkg",
+      "bytes": 27900,
+      "sha256": "1996968441d177047c3ea2fb73808e3281340084cf0203e130d6a8500bcca4f4"
+    },
+    {
+      "file": ".temp/feed/Iugam.Yard.DevHost.0.1.0.nupkg",
+      "bytes": 24134,
+      "sha256": "f474e60d9b2bf01c7d5eeb17fc51f819ca123a7aeb5ef0ad299703df928e3ed9"
+    },
+    {
+      "file": ".temp/feed/Iugam.Yard.Templates.0.1.0.nupkg",
+      "bytes": 105108,
+      "sha256": "52d4d430d1897aeea2d755ad19e6f8d282f6215750a9c3f1547146b3ceb854aa"
+    }
+  ],
+  "unitTests": {
+    "passed": 45,
+    "failed": 0,
+    "skipped": 0,
+    "log": ".temp/final15-unit.log"
+  },
+  "format": {
+    "passed": true,
+    "log": ".temp/final15-format.log"
+  },
+  "cases": [
+    {
+      "name": "sqlite",
+      "record": ".temp/acceptance/sqlite-587a212b/results.json",
+      "passed": true,
+      "checks": 22
+    },
+    {
+      "name": "postgresql-two-backends-two-frontends",
+      "record": ".temp/acceptance/postgresql-29b5de58/results.json",
+      "passed": true,
+      "checks": 26
+    },
+    {
+      "name": "two-backends",
+      "record": ".temp/acceptance/sqlite-31077479/results.json",
+      "passed": true,
+      "checks": 24
+    },
+    {
+      "name": "two-frontends",
+      "record": ".temp/acceptance/sqlite-f9646fbe/results.json",
+      "passed": true,
+      "checks": 22
+    },
+    {
+      "name": "processes",
+      "record": ".temp/process-acceptance/304ff297/results.json",
+      "passed": true,
+      "checks": 21
+    },
+    {
+      "name": "sqlite-migration-recovery",
+      "record": ".temp/migration-acceptance/99f8dc17/results.json",
+      "passed": true,
+      "checks": 9
+    },
+    {
+      "name": "postgresql-migration-recovery",
+      "record": ".temp/migration-acceptance/bb9d729b/results.json",
+      "passed": true,
+      "checks": 9
+    },
+    {
+      "name": "structure-and-legacy-audit",
+      "record": ".temp/structure15/results.json",
+      "passed": true,
+      "checks": 5
+    }
+  ],
+  "nativeTemplate": {
+    "passed": true,
+    "project": ".temp/native15-template",
+    "logs": [
+      ".temp/native15-install.log",
+      ".temp/native15-new.log",
+      ".temp/native15-init.log",
+      ".temp/native15-check.log"
+    ]
+  },
+  "browser": {
+    "passed": true,
+    "desktopCasesPerDatabase": 8,
+    "mobileCasesPerDatabase": 8,
+    "databases": [
+      "sqlite",
+      "postgresql"
+    ],
+    "screenshotsInspected": [
+      "mobile organization and roles"
+    ]
+  },
+  "interactivePassword": {
+    "ttyVerified": true,
+    "inputEchoed": false
+  },
+  "notExecuted": [
+    "macOS",
+    "Windows",
+    "live GitHub application credentials",
+    "external SMTP provider delivery",
+    "production deployment",
+    "historical project migration"
+  ],
+  "retainedFailedAttempt": {
+    "record": ".temp/acceptance/postgresql-f6f2ac98/results.json",
+    "reason": "MSBuild MSB4166 child nodes exited prematurely during concurrent restore; repeated with lower concurrency and passed."
+  }
+}
