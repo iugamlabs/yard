@@ -1,0 +1,3 @@
+# Yard development
+
+Yard is a convention-first .NET monorepo CLI. Read docs/specification.md and docs/implementation.md before changes. All packages use Iugam.Yard.*. Keep generated application behavior fixed; configuration describes topology, not arbitrary commands. Tests and generated repositories belong in .temp. Do not change the four source business repositories or publish packages remotely. Format C# using python3 scripts/format_csharp.py (CSharpier then Roslyn whitespace); checks use --check. Build with dotnet build Yard.slnx, test with dotnet test Yard.slnx, package with python3 scripts/pack.py. Never claim unexecuted checks passed.

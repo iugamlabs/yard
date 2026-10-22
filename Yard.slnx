@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Yard.AspNetCore/Yard.AspNetCore.csproj" />
+    <Project Path="src/Yard.Cli/Yard.Cli.csproj" />
+    <Project Path="src/Yard.Core/Yard.Core.csproj" />
+    <Project Path="src/Yard.DevHost/Yard.DevHost.csproj" />
+    <Project Path="src/Yard.Templates/Yard.Templates.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Yard.Tests/Yard.Tests.csproj" />
+  </Folder>
+</Solution>

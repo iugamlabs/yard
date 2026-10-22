@@ -1,0 +1,10 @@
+.temp/
+.yard/
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+.env.local
+**/test-results/
+**/playwright-report/
+**/__pycache__/
