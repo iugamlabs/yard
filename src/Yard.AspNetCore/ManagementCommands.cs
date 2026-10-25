@@ -5,7 +5,11 @@ using Microsoft.OpenApi;
 namespace Yard.AspNetCore;
 
 public static class ManagementCommands {
-    public static async Task<int> Run(IServiceProvider services, string[] args) {
+    public static async Task<int> Run(
+        IServiceProvider services,
+        string[] args,
+        CancellationToken ct = default
+    ) {
         try {
             if (args.Length == 0)
                 throw new YardHttpException(400, "management_command_required");
@@ -26,28 +30,7 @@ public static class ManagementCommands {
             if (args[0] == "db") {
                 if (args.Length < 2)
                     throw new YardHttpException(400, "db_command_required");
-                if (args[1] == "migrate") {
-                    var known = db.Database.GetMigrations().ToHashSet();
-                    if (
-                        (await db.Database.GetAppliedMigrationsAsync()).Any(x => !known.Contains(x))
-                    )
-                        throw new InvalidOperationException(
-                            "Unknown migration history; this database does not belong to the current migration chain."
-                        );
-                    await db.Database.MigrateAsync();
-                    Console.WriteLine("Database migrations applied.");
-                } else if (args[1] == "status") {
-                    var applied = (await db.Database.GetAppliedMigrationsAsync()).ToArray();
-                    var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
-                    Console.WriteLine(JsonSerializer.Serialize(new { applied, pending }));
-                } else if (args[1] == "check") {
-                    if (db.Database.HasPendingModelChanges())
-                        throw new InvalidOperationException(
-                            "The model differs from committed migrations."
-                        );
-                    Console.WriteLine("Migration model is current.");
-                } else
-                    throw new YardHttpException(400, "unknown_database_command");
+                await DatabaseManagement.Run(db, args[1], ct);
                 return 0;
             }
             if (args[0] != "user" || args.Length < 2)
@@ -126,12 +109,17 @@ public static class ManagementCommands {
             when (e
                     is YardHttpException
                         or InvalidOperationException
+                        or NotSupportedException
                         or DbUpdateException
                         or System.Data.Common.DbException
             ) {
             Console.Error.WriteLine(
                 e is DbUpdateException or System.Data.Common.DbException
-                    ? "The account operation conflicts with existing data."
+                    ? (
+                        args.FirstOrDefault() == "db"
+                            ? "The database operation failed. Check database availability, permissions and constraints."
+                            : "The account operation conflicts with existing data."
+                    )
                     : e.Message
             );
             return 1;

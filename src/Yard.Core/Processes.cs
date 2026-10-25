@@ -11,7 +11,8 @@ public static class Processes {
         IReadOnlyDictionary<string, string?>? env = null,
         string? input = null,
         bool capture = false,
-        Action<string>? observe = null
+        Action<string>? observe = null,
+        bool outputToError = false
     ) {
         var output = new System.Text.StringBuilder();
         using var force = new CancellationTokenSource();
@@ -28,7 +29,9 @@ public static class Processes {
         cmd = cmd.WithStandardOutputPipe(
             capture
                 ? PipeTarget.ToStringBuilder(output)
-                : PipeTarget.ToStream(Console.OpenStandardOutput())
+                : PipeTarget.ToStream(
+                    outputToError ? Console.OpenStandardError() : Console.OpenStandardOutput()
+                )
         );
         cmd = cmd.WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()));
         if (observe != null)
@@ -59,7 +62,8 @@ public static class Processes {
         string directory,
         CancellationToken token,
         IReadOnlyDictionary<string, string?>? environment = null,
-        Func<Task>? onCancellation = null
+        Func<Task>? onCancellation = null,
+        TimeSpan? cancellationTimeout = null
     ) {
         var start = new System.Diagnostics.ProcessStartInfo(executable) {
             WorkingDirectory = directory,
@@ -80,7 +84,9 @@ public static class Processes {
             if (onCancellation != null)
                 await onCancellation();
             try {
-                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(45));
+                await process
+                    .WaitForExitAsync()
+                    .WaitAsync(cancellationTimeout ?? TimeSpan.FromSeconds(45));
             }
             catch (TimeoutException) {
                 if (!process.HasExited)

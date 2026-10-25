@@ -261,8 +261,26 @@ public static class YardHosting {
             app.UseRouting();
             app.UseEndpoints(_ => { });
         }
-        Environment.ExitCode = await ManagementCommands.Run(app.Services, args.Skip(1).ToArray());
-        await app.DisposeAsync();
+        using var cancellation = new CancellationTokenSource();
+        ConsoleCancelEventHandler onCancel = (_, e) => {
+            e.Cancel = true;
+            cancellation.Cancel();
+        };
+        Console.CancelKeyPress += onCancel;
+        try {
+            Environment.ExitCode = await ManagementCommands.Run(
+                app.Services,
+                args.Skip(1).ToArray(),
+                cancellation.Token
+            );
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) {
+            Environment.ExitCode = 130;
+        }
+        finally {
+            Console.CancelKeyPress -= onCancel;
+            await app.DisposeAsync();
+        }
         return true;
     }
 

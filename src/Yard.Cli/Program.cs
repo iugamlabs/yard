@@ -8,6 +8,11 @@ using Yard.Cli;
 using var cancel = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => {
     e.Cancel = true;
+    if (
+        args.Where(x => x != "--json").Take(2).SequenceEqual(new[] { "db", "shell" })
+        && !Console.IsInputRedirected
+    )
+        return;
     cancel.Cancel();
 };
 var root = new RootCommand("Yard — one convention for your C# + React monorepos");
@@ -127,20 +132,51 @@ foreach (var action in new[] { "status", "stop", "restart" }) {
 }
 root.Add(dev);
 var db = new Command("db", "Manage the primary or explicitly selected backend database");
-foreach (var action in new[] { "up", "down", "status", "generate", "migrate", "check" }) {
+foreach (
+    var action in new[]
+    {
+        "up",
+        "down",
+        "status",
+        "generate",
+        "migrate",
+        "check",
+        "flush",
+        "shell",
+        "sql",
+    }
+) {
     var sub = new Command(action);
     sub.Add(appOption);
     var all = new Option<bool>("--all");
-    sub.Add(all);
+    if (action is not ("shell" or "sql"))
+        sub.Add(all);
+    var yes = new Option<bool>("--yes") {
+        Description = "Confirm deletion of all target database data",
+    };
+    var migrationPlan = new Option<bool>("--plan") {
+        Description = "List pending migrations without applying them",
+    };
+    var sqlOutput = new Option<string?>("--output", "-o") {
+        Description = "Write pending migration SQL to a file",
+    };
+    if (action == "flush")
+        sub.Add(yes);
+    if (action == "migrate")
+        sub.Add(migrationPlan);
+    if (action == "sql")
+        sub.Add(sqlOutput);
     var migration = new Argument<string?>("name") { Arity = ArgumentArity.ZeroOrOne };
     if (action == "generate")
         sub.Add(migration);
     sub.SetAction(async p =>
         await new Commands(Workspace.Find(), cancel.Token).Database(
-            action,
+            action == "migrate" && p.GetValue(migrationPlan) ? "plan" : action,
             p.GetValue(appOption),
             p.GetValue(all),
-            action == "generate" ? p.GetValue(migration) : null
+            action == "generate" ? p.GetValue(migration) : null,
+            action == "flush" && p.GetValue(yes),
+            action == "sql" ? p.GetValue(sqlOutput) : null
         )
     );
     db.Add(sub);
@@ -282,16 +318,19 @@ try {
     }
     var config = new InvocationConfiguration { EnableDefaultExceptionHandler = false };
     var parsed = root.Parse(args);
-    if (args.Contains("--json") && parsed.Errors.Count > 0) {
-        Console.Error.WriteLine(
-            JsonSerializer.Serialize(
-                new {
-                    code = "invalid_arguments",
-                    message = string.Join("; ", parsed.Errors.Select(x => x.Message)),
-                    exitCode = 2,
-                }
-            )
-        );
+    if (parsed.Errors.Count > 0) {
+        if (args.Contains("--json"))
+            Console.Error.WriteLine(
+                JsonSerializer.Serialize(
+                    new {
+                        code = "invalid_arguments",
+                        message = string.Join("; ", parsed.Errors.Select(x => x.Message)),
+                        exitCode = 2,
+                    }
+                )
+            );
+        else
+            await parsed.InvokeAsync(config, cancel.Token);
         return 2;
     }
     return await parsed.InvokeAsync(config, cancel.Token);

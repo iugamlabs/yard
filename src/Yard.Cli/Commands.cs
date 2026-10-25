@@ -90,17 +90,56 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         Console.WriteLine("Initialized. Create the first administrator: yard user bootstrap owner");
     }
 
-    public async Task Database(string verb, string? app, bool all, string? migration) {
+    public async Task Database(
+        string verb,
+        string? app,
+        bool all,
+        string? migration,
+        bool yes = false,
+        string? sqlOutput = null
+    ) {
+        if (all && app != null)
+            throw new YardException("--app and --all cannot be combined.", 2);
+        if (all && verb is "shell" or "sql")
+            throw new YardException("This database command accepts one backend only.", 2);
+        var targets = all ? w.OrderedBackends() : w.Select(app ?? "api", true);
         var s = LocalSettings.Load(w);
         if (verb is "up" or "down") {
             await DatabaseHost(verb, s);
             return;
         }
-        var targets = all ? w.OrderedBackends() : w.Select(app ?? "api", true);
+        if (verb == "shell") {
+            await DatabaseShell(targets.Single(), s);
+            return;
+        }
+        if (verb == "flush" && !yes) {
+            Console.Error.WriteLine(
+                $"Clear ALL data in checkout {w.Root} ({w.Identity}), provider {w.Definition.Database}:"
+            );
+            foreach (var target in targets)
+                Console.Error.WriteLine($"  {target}: {DatabaseLocation(s, target)}");
+            if (Console.IsInputRedirected)
+                throw new YardException(
+                    "Redirected input requires --yes to confirm database flushing.",
+                    2
+                );
+            Console.Error.Write(
+                "Users, organizations, audits and business data will be deleted. Type yes to continue [cancel]: "
+            );
+            // Console's synchronized reader blocks even in ReadLineAsync; wait separately so Ctrl+C can exit.
+            if (await Task.Run(Console.ReadLine, ct).WaitAsync(ct) != "yes")
+                throw new OperationCanceledException("Database flush cancelled.", ct);
+        }
         var completed = new List<string>();
         try {
             foreach (var target in targets) {
-                await Run("dotnet", ["build", w.Project(target), "--no-restore"]);
+                await Processes.Run(
+                    "dotnet",
+                    ["build", w.Project(target), "--no-restore"],
+                    w.Root,
+                    ct,
+                    outputToError: verb == "sql"
+                );
                 if (verb == "generate") {
                     if (
                         string.IsNullOrWhiteSpace(migration)
@@ -129,6 +168,33 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
                             Env(target)
                         );
                     }
+                } else if (verb == "sql") {
+                    var sql = await Processes.Capture(
+                        "dotnet",
+                        [w.Assembly(target), "yard", "db", "sql"],
+                        w.Root,
+                        ct,
+                        Env(target)
+                    );
+                    if (sqlOutput == null)
+                        Console.Write(sql);
+                    else
+                        await File.WriteAllTextAsync(Path.GetFullPath(sqlOutput, w.Root), sql, ct);
+                } else if (verb == "plan") {
+                    var result = await Processes.Capture(
+                        "dotnet",
+                        [w.Assembly(target), "yard", "db", "plan"],
+                        w.Root,
+                        ct,
+                        Env(target)
+                    );
+                    using var document = JsonDocument.Parse(result);
+                    var pending = document.RootElement.GetProperty("pending");
+                    Console.WriteLine($"Database plan: {target} ({w.Definition.Database})");
+                    if (pending.GetArrayLength() == 0)
+                        Console.WriteLine("  No pending migrations.");
+                    foreach (var item in pending.EnumerateArray())
+                        Console.WriteLine("  Apply " + item.GetString());
                 } else
                     await Run("dotnet", [w.Assembly(target), "yard", "db", verb], Env(target));
                 completed.Add(target);
@@ -140,6 +206,97 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
                     "Completed database targets: " + string.Join(", ", completed)
                 );
             throw;
+        }
+    }
+
+    private static string DatabaseLocation(LocalSettings settings, string app) {
+        var connection = new System.Data.Common.DbConnectionStringBuilder {
+            ConnectionString = settings.Connections[app],
+        };
+        return Convert.ToString(
+            connection[settings.Database == "sqlite" ? "Data Source" : "Database"]
+        )!;
+    }
+
+    private async Task DatabaseShell(string app, LocalSettings settings) {
+        string executable;
+        string[] args;
+        if (w.Definition.Database == "sqlite") {
+            var path = Path.GetFullPath(DatabaseLocation(settings, app), w.Root);
+            if (!File.Exists(path))
+                throw new YardException("Database file is missing. Run yard init first.");
+            executable = "sqlite3";
+            args = ["-bail", "-cmd", "PRAGMA foreign_keys=ON;", path];
+        } else {
+            var container = "yard-" + w.Identity;
+            string owner;
+            try {
+                owner = await Processes.Capture(
+                    "docker",
+                    [
+                        "inspect",
+                        "--format",
+                        "{{index .Config.Labels \"iugam.yard.checkout\"}} {{.State.Running}}",
+                        container,
+                    ],
+                    w.Root,
+                    ct
+                );
+            }
+            catch (YardException) {
+                throw new YardException("Database container is unavailable. Run yard db up first.");
+            }
+            catch (System.ComponentModel.Win32Exception) {
+                throw new YardException(
+                    "Docker is missing. Install Docker and run yard db up first."
+                );
+            }
+            var identity = owner.Trim().Split(' ');
+            if (identity.FirstOrDefault() != w.Identity)
+                throw new YardException(
+                    "Database container ownership does not match this checkout."
+                );
+            if (identity.LastOrDefault() != "true")
+                throw new YardException("Database container is stopped. Run yard db up first.");
+            executable = "docker";
+            args =
+            [
+                "exec",
+                "-i",
+                .. (
+                    !Console.IsInputRedirected && !Console.IsOutputRedirected ? new[] { "-t" } : []
+                ),
+                container,
+                "psql",
+                "-X",
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-h",
+                "127.0.0.1",
+                "-U",
+                "yard",
+                "-d",
+                DatabaseLocation(settings, app),
+            ];
+        }
+        try {
+            var exitCode = await Processes.Inherit(
+                executable,
+                args,
+                w.Root,
+                ct,
+                cancellationTimeout: TimeSpan.FromSeconds(2)
+            );
+            if (exitCode != 0)
+                throw new YardException(
+                    "Database client exited with code " + exitCode + ".",
+                    exitCode
+                );
+        }
+        catch (System.ComponentModel.Win32Exception) {
+            throw new YardException(
+                $"Database client '{executable}' is missing. Install {executable} and retry yard db shell."
+            );
         }
     }
 
