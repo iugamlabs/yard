@@ -33,6 +33,7 @@ yard new Example --output /path/to/example
 
 - `yard dev` 启动全部应用；`--app name` 启动所选应用及其依赖。`YARD_PORT=8081 yard dev` 可并行运行另一 checkout。`dev status/stop/restart` 只控制当前 checkout。
 - `yard db generate Name` 同时维护 PostgreSQL、SQLite 迁移链；`db migrate --all` 按依赖顺序逐库执行。`db down` 保留数据。启动不会自动迁移。
+- `yard db migrate --plan` 查看待执行迁移，`yard db sql [-o file]` 预览对应 SQL。`yard db flush [--yes]` 清空数据并保留结构与迁移历史，随后可重新 bootstrap；`yard db shell` 打开原生客户端（SQLite 需要本机 `sqlite3`）。数据库命令默认主 `api`，可用 `--app` 选择后端。
 - `yard fmt` 依次执行 CSharpier、Roslyn whitespace 和前端 Prettier。`check` 检查同步、格式、lint、类型、契约、构建和测试；数据库测试使用隔离资源。
 - `yard verify` 在隔离副本中运行桌面/手机浏览器、GitHub 测试协议、HMR、C# 编译恢复、异常退出与端口清理验收，不使用开发业务库。
 - `yard sync --check`、`yard contracts --check`、`yard upgrade --plan` 只检查源码差异。首版升级支持当前版本检查和受控迁移引擎；没有历史迁移时明确拒绝未知版本。

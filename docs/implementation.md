@@ -64,3 +64,23 @@ python3 scripts/migration_acceptance.py --tool .temp/recheck/yard --project .tem
 ```
 
 迁移失败验收脚本只允许修改本仓库 `.temp` 内的测试项目。重复测试时使用新 fixture，避免重用已生成同名迁移的项目。所有原始日志保留在对应 results.json 同级 logs 目录或脚本日志中。
+
+## 数据库命令补齐验收（2026-10-25）
+
+新增 `db flush`、`db shell`、`db migrate --plan` 和 `db sql [-o file]`。清空使用提供程序事务并恢复平台设置及账号并发锁；保留表结构、迁移历史和迁移锁，不重放业务种子数据。管理模式支持取消，普通参数解析错误统一返回约定的退出码 2。迁移执行与预览拒绝未知或不连续历史及模型漂移。
+
+本次在 Linux 执行 `dotnet build Yard.slnx`、`dotnet test Yard.slnx`（59 项通过）、`python3 scripts/format_csharp.py --check` 和 `python3 scripts/pack.py`。构建仍有原有的 `NU1510` 提示，没有宣称零警告。模板锁文件中的 Yard 包摘要由打包脚本更新。
+
+最终本地包实际安装在 `.temp/db-distribution3/tools`，使用独立的 CLI home 和 Yard 包缓存，未通过 ProjectReference 绕过分发链。`scripts/database_acceptance.py` 创建双后端项目和另一个同名 checkout，SQLite 56 项、PostgreSQL 59 项命令检查通过；同时断言清空范围、外键/循环引用、自增重置、基础记录及 bootstrap 恢复、失败回滚、迁移历史保留、不同 checkout 数据隔离、模型漂移拒绝及逐库部分完成报告。真实原生终端验证了管道输入、后端选择、退出码、查询中断后继续输入和清空确认期间 Ctrl+C；PostgreSQL 另验证事务等待期间取消及容器归属拒绝。SQLite 客户端仅解包在 `.temp/db-client`，没有安装到系统。
+
+最终结果分别为 `.temp/database-acceptance/sqlite-e2515d90/results.json` 和 `.temp/database-acceptance/postgresql-b693bcc6/results.json`；日志在各自 `logs` 下，交付索引在 `.temp/database-delivery.json`。此前失败记录保留：普通参数错误退出码与确认读取阻塞已修复；验收脚本对 PostgreSQL 事务起始语句及伪终端尺寸的判断也已修正，没有将此前失败计为通过。本次未执行 macOS 或 Windows 验收，没有远程发布包。
+
+复现（`--tool` 指向实际安装的本地包，SQLite 需要 PATH 中有 `sqlite3`，PostgreSQL 需要可用 Docker）：
+
+```sh
+export NUGET_PACKAGES="$PWD/.temp/db-distribution3/packages"
+export DOTNET_CLI_HOME="$PWD/.temp/db-distribution3/home"
+export PATH="$PWD/.temp/db-client/usr/bin:$PATH"
+python3 scripts/database_acceptance.py --tool .temp/db-distribution3/tools/yard --database sqlite
+python3 scripts/database_acceptance.py --tool .temp/db-distribution3/tools/yard --database postgresql
+```
