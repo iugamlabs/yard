@@ -47,27 +47,6 @@ public static class Templates {
             throw new YardException("Template generation failed: " + result.ErrorMessage);
         w = Workspace.Load(target);
         Synchronization.Apply(w, false);
-        var feed = Path.Combine(AppContext.BaseDirectory, "Feed");
-        if (Directory.Exists(feed))
-            foreach (var package in Directory.GetFiles(feed, "*.nupkg")) {
-                var id = Path.GetFileName(package).Replace("." + Versions.Yard + ".nupkg", "");
-                var hash = Convert.ToBase64String(
-                    System.Security.Cryptography.SHA512.HashData(File.ReadAllBytes(package))
-                );
-                foreach (
-                    var lockfile in Directory.GetFiles(
-                        target,
-                        "packages.lock.json",
-                        SearchOption.AllDirectories
-                    )
-                ) {
-                    var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(lockfile))!;
-                    foreach (var framework in node["dependencies"]!.AsObject())
-                        if (framework.Value?[id] is System.Text.Json.Nodes.JsonObject dependency)
-                            dependency["contentHash"] = hash;
-                    File.WriteAllText(lockfile, node.ToJsonString(Workspace.Json) + "\n");
-                }
-            }
         return w;
     }
 
@@ -102,36 +81,47 @@ public static class Templates {
         if (Directory.Exists(target))
             throw new YardException("Application directory already exists.", 2);
         var source = Path.Combine(Root, "apps", kind == "backend" ? "api" : "web");
-        foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories)) {
-            var relative = Path.GetRelativePath(source, file);
-            if (
-                relative
-                    .Split(Path.DirectorySeparatorChar)
-                    .Any(x => x is "bin" or "obj" or "node_modules")
-            )
-                continue;
-            var replacement = kind == "backend" ? next.ProjectName(name) : w.Definition.Name;
-            relative = relative.Replace("YardApp.Api", replacement);
-            var text = File.ReadAllText(file)
-                .Replace(
-                    "YardApp.Api",
-                    kind == "backend" ? replacement : w.Definition.Name + ".Api"
+        var sources =
+            kind == "backend"
+                ? new[] { source, Path.Combine(Root, "providers", w.Definition.Database) }
+                : new[] { source };
+        foreach (var tree in sources)
+            foreach (var file in Directory.GetFiles(tree, "*", SearchOption.AllDirectories)) {
+                var relative = Path.GetRelativePath(tree, file);
+                if (
+                    relative
+                        .Split(Path.DirectorySeparatorChar)
+                        .Any(x => x is "bin" or "obj" or "node_modules")
                 )
-                .Replace(
-                    "yardapp.api",
-                    kind == "backend"
-                        ? replacement.ToLowerInvariant()
-                        : w.Definition.Name.ToLowerInvariant() + ".api"
-                )
-                .Replace("YardApp", w.Definition.Name)
-                .Replace("yardapp", w.Definition.Name.ToLowerInvariant())
-                .Replace("__DATABASE__", w.Definition.Database);
-            if (kind == "frontend" && Path.GetFileName(file) == "package.json")
-                text = text.Replace("/web\"", "/" + name + "\"");
-            var p = Path.Combine(target, relative);
-            Directory.CreateDirectory(Path.GetDirectoryName(p)!);
-            File.WriteAllText(p, text);
-        }
+                    continue;
+                var replacement = kind == "backend" ? next.ProjectName(name) : w.Definition.Name;
+                relative = relative.Replace("YardApp.Api", replacement);
+                var text = File.ReadAllText(file)
+                    .Replace(
+                        "YardApp.Api",
+                        kind == "backend" ? replacement : w.Definition.Name + ".Api"
+                    )
+                    .Replace(
+                        "yardapp.api",
+                        kind == "backend"
+                            ? replacement.ToLowerInvariant()
+                            : w.Definition.Name.ToLowerInvariant() + ".api"
+                    )
+                    .Replace("YardApp", w.Definition.Name)
+                    .Replace("yardapp", w.Definition.Name.ToLowerInvariant())
+                    .Replace("__DATABASE__", w.Definition.Database)
+                    .Replace(
+                        "__PROVIDER_PACKAGE__",
+                        w.Definition.Database == "sqlite"
+                            ? "Microsoft.EntityFrameworkCore.Sqlite"
+                            : "Npgsql.EntityFrameworkCore.PostgreSQL"
+                    );
+                if (kind == "frontend" && Path.GetFileName(file) == "package.json")
+                    text = text.Replace("/web\"", "/" + name + "\"");
+                var p = Path.Combine(target, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(p)!);
+                File.WriteAllText(p, text);
+            }
         if (kind == "frontend") {
             var lockfile = Path.Combine(w.Root, "pnpm-lock.yaml");
             var locked = File.ReadAllText(lockfile);

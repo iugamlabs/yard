@@ -7,22 +7,69 @@ namespace Yard.Cli;
 public sealed class Commands(Workspace w, CancellationToken ct) {
     private Dictionary<string, string?> Env(string app) {
         var environment = new Dictionary<string, string?> {
-            ["YARD_ROOT"] = w.Root,
-            ["YARD_APP"] = app,
-            ["YARD_DATABASE"] = w.Definition.Database,
-            ["Yard__Database"] = w.Definition.Database,
             ["ASPNETCORE_ENVIRONMENT"] = "Development",
             ["DOTNET_ENVIRONMENT"] = "Development",
             ["Logging__LogLevel__Default"] = "Warning",
             ["DOTNET_NOLOGO"] = "1",
-            ["Yard__KeysDirectory"] = Path.Combine(w.State, "keys", app),
         };
-        if (File.Exists(LocalSettings.PathFor(w))) {
-            var local = LocalSettings.Load(w);
-            environment["Yard__ConnectionString"] = local.Connections[app];
-            environment["Yard__VerificationKey"] = local.VerificationKey;
-        }
+        if (File.Exists(LocalSettings.PathFor(w)))
+            environment["ConnectionStrings__Default"] = LocalSettings.Load(w).Connections[app];
         return environment;
+    }
+
+    private string ToolProject(string app) =>
+        Path.Combine(w.State, "tools", app, "Yard.Tools.csproj");
+
+    private string ToolAssembly(string app) =>
+        Path.Combine(w.State, "tools", app, "bin", "Debug", "net10.0", "Yard.Tools.dll");
+
+    private async Task BuildTool(string app, bool outputToError = false) {
+        if (!File.Exists(ToolProject(app)))
+            throw new YardException("Development tools are missing. Run yard install.");
+        await Processes.Run(
+            "dotnet",
+            ["build", ToolProject(app), "--no-restore"],
+            w.Root,
+            ct,
+            outputToError: outputToError
+        );
+    }
+
+    private void GenerateTool(string app) {
+        var directory = Path.GetDirectoryName(ToolProject(app))!;
+        Directory.CreateDirectory(directory);
+        var reference = System.Security.SecurityElement.Escape(w.Project(app));
+        File.WriteAllText(
+            ToolProject(app),
+            $"<Project Sdk=\"Microsoft.NET.Sdk.Web\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup><ItemGroup><ProjectReference Include=\"{reference}\"/><PackageReference Include=\"Iugam.Yard.DotNet\" Version=\"{Versions.Yard}\"/></ItemGroup></Project>"
+        );
+        File.WriteAllText(Path.Combine(directory, "Directory.Build.props"), "<Project/>");
+        File.WriteAllText(Path.Combine(directory, "Directory.Packages.props"), "<Project/>");
+        var appNamespace = w.ProjectName(app);
+        File.WriteAllText(
+            Path.Combine(directory, "Program.cs"),
+            $$"""
+            using {{appNamespace}}.Hosting;
+            using {{appNamespace}}.Infrastructure;
+            using Microsoft.Extensions.Logging;
+            return await Yard.DotNet.DevelopmentTools.Run(args,
+                () => new AppDbContextFactory().CreateDbContext([]),
+                () => {
+                    var builder = WebApplication.CreateBuilder(new WebApplicationOptions {
+                        ApplicationName = typeof(AppDbContext).Assembly.GetName().Name,
+                        ContentRootPath = {{JsonSerializer.Serialize(
+                Path.GetDirectoryName(w.Project(app))
+            )}}
+                    });
+                    builder.Logging.ClearProviders();
+                    builder.AddApplication();
+                    var app = builder.Build();
+                    app.UseApplication();
+                    return app;
+                });
+            """
+                + "\n"
+        );
     }
 
     private Task Run(
@@ -45,6 +92,29 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         RequireStructure();
         Templates.Feed(w);
         await Run("dotnet", ["tool", "restore", "--add-source", Path.Combine(w.State, "feed")]);
+        File.WriteAllText(
+            Path.Combine(w.State, "NuGet.Config"),
+            new System.Xml.Linq.XElement(
+                "configuration",
+                new System.Xml.Linq.XElement(
+                    "packageSources",
+                    new System.Xml.Linq.XElement("clear"),
+                    new System.Xml.Linq.XElement(
+                        "add",
+                        new System.Xml.Linq.XAttribute("key", "yard-local"),
+                        new System.Xml.Linq.XAttribute("value", Path.Combine(w.State, "feed"))
+                    ),
+                    new System.Xml.Linq.XElement(
+                        "add",
+                        new System.Xml.Linq.XAttribute("key", "nuget.org"),
+                        new System.Xml.Linq.XAttribute(
+                            "value",
+                            "https://api.nuget.org/v3/index.json"
+                        )
+                    )
+                )
+            ).ToString()
+        );
         var host = Path.Combine(w.State, "host");
         Directory.CreateDirectory(host);
         File.WriteAllText(
@@ -60,6 +130,11 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         await Run("dotnet", ["restore", w.Definition.Name + ".slnx", "--locked-mode"]);
         await Run("dotnet", ["restore", Path.Combine(host, "Yard.Host.csproj")]);
         await Run("dotnet", ["build", Path.Combine(host, "Yard.Host.csproj"), "--no-restore"]);
+        foreach (var app in w.Definition.Backends) {
+            GenerateTool(app);
+            await Run("dotnet", ["restore", ToolProject(app)]);
+            await BuildTool(app);
+        }
         await Run("pnpm", ["install", "--frozen-lockfile"]);
     }
 
@@ -73,21 +148,10 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         RequireStructure();
         Synchronization.Apply(w, false);
         LocalSettings.Configure(w);
-        var localConfig = Path.Combine(w.State, "appsettings.local.json");
-        if (!File.Exists(localConfig)) {
-            File.WriteAllText(
-                localConfig,
-                "{\"Yard\":{\"Mail\":{\"Host\":\"\",\"Port\":587,\"Username\":\"\",\"Password\":\"\",\"FromAddress\":\"\",\"FromName\":\""
-                    + w.Definition.Name
-                    + "\",\"Tls\":\"StartTls\"},\"GitHub\":{\"Enabled\":false,\"ClientId\":\"\",\"ClientSecret\":\"\"}}}\n"
-            );
-            if (!OperatingSystem.IsWindows())
-                File.SetUnixFileMode(localConfig, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
         await Install();
         await Database("up", null, false, null);
         await Database("migrate", null, true, null);
-        Console.WriteLine("Initialized. Create the first administrator: yard user bootstrap owner");
+        Console.WriteLine("Initialized. Run yard dev to start development.");
     }
 
     public async Task Database(
@@ -124,7 +188,7 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
                     2
                 );
             Console.Error.Write(
-                "Users, organizations, audits and business data will be deleted. Type yes to continue [cancel]: "
+                "All application data will be deleted; migration history is retained. Type yes to continue [cancel]: "
             );
             // Console's synchronized reader blocks even in ReadLineAsync; wait separately so Ctrl+C can exit.
             if (await Task.Run(Console.ReadLine, ct).WaitAsync(ct) != "yes")
@@ -133,13 +197,7 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         var completed = new List<string>();
         try {
             foreach (var target in targets) {
-                await Processes.Run(
-                    "dotnet",
-                    ["build", w.Project(target), "--no-restore"],
-                    w.Root,
-                    ct,
-                    outputToError: verb == "sql"
-                );
+                await BuildTool(target, outputToError: verb == "sql");
                 if (verb == "generate") {
                     if (
                         string.IsNullOrWhiteSpace(migration)
@@ -149,29 +207,27 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
                         )
                     )
                         throw new YardException("A C# migration name is required.", 2);
-                    foreach (var provider in new[] { "Sqlite", "Postgres" }) {
-                        await Run(
-                            "dotnet",
-                            [
-                                "ef",
-                                "migrations",
-                                "add",
-                                migration,
-                                "--project",
-                                w.Project(target),
-                                "--context",
-                                provider + "AppDbContext",
-                                "--output-dir",
-                                "Infrastructure/Migrations/" + provider,
-                                "--no-build",
-                            ],
-                            Env(target)
-                        );
-                    }
+                    await Run(
+                        "dotnet",
+                        [
+                            "ef",
+                            "migrations",
+                            "add",
+                            migration,
+                            "--project",
+                            w.Project(target),
+                            "--context",
+                            "AppDbContext",
+                            "--output-dir",
+                            "Infrastructure/Migrations",
+                            "--no-build",
+                        ],
+                        Env(target)
+                    );
                 } else if (verb == "sql") {
                     var sql = await Processes.Capture(
                         "dotnet",
-                        [w.Assembly(target), "yard", "db", "sql"],
+                        [ToolAssembly(target), "db", "sql"],
                         w.Root,
                         ct,
                         Env(target)
@@ -183,7 +239,7 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
                 } else if (verb == "plan") {
                     var result = await Processes.Capture(
                         "dotnet",
-                        [w.Assembly(target), "yard", "db", "plan"],
+                        [ToolAssembly(target), "db", "plan"],
                         w.Root,
                         ct,
                         Env(target)
@@ -196,7 +252,7 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
                     foreach (var item in pending.EnumerateArray())
                         Console.WriteLine("  Apply " + item.GetString());
                 } else
-                    await Run("dotnet", [w.Assembly(target), "yard", "db", verb], Env(target));
+                    await Run("dotnet", [ToolAssembly(target), "db", verb], Env(target));
                 completed.Add(target);
             }
         }
@@ -427,51 +483,6 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         }
     }
 
-    public async Task User(string verb, string? name, bool stdin) {
-        string? input = null;
-        if (verb is "bootstrap" or "create" or "reset-password") {
-            if (stdin)
-                input = (await Console.In.ReadLineAsync() ?? "") + "\n";
-            else {
-                if (Console.IsInputRedirected)
-                    throw new YardException(
-                        "Redirected password input requires --password-stdin.",
-                        2
-                    );
-                Console.Error.Write("Password: ");
-                var password = ReadSecret();
-                Console.Error.Write("Confirm password: ");
-                if (password != ReadSecret())
-                    throw new YardException("Passwords do not match.", 2);
-                input = password + "\n";
-            }
-        }
-        if (verb != "list" && string.IsNullOrWhiteSpace(name))
-            throw new YardException("Username is required.", 2);
-        _ = LocalSettings.Load(w);
-        await Run("dotnet", ["build", w.Project("api"), "--no-restore"]);
-        var args = new List<string> { w.Assembly("api"), "yard", "user", verb };
-        if (name != null)
-            args.Add(name);
-        await Run("dotnet", args, Env("api"), input);
-    }
-
-    private static string ReadSecret() {
-        var s = new System.Text.StringBuilder();
-        while (true) {
-            var k = Console.ReadKey(true);
-            if (k.Key == ConsoleKey.Enter) {
-                Console.Error.WriteLine();
-                return s.ToString();
-            }
-            if (k.Key == ConsoleKey.Backspace) {
-                if (s.Length > 0)
-                    s.Length--;
-            } else if (!char.IsControl(k.KeyChar))
-                s.Append(k.KeyChar);
-        }
-    }
-
     public async Task AwaitDevelopmentStop() {
         var settings = LocalSettings.Load(w);
         using var control = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
@@ -546,10 +557,10 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         }
         var selected = w.DevelopmentApps(app);
         foreach (var backend in selected.Where(w.Definition.Backends.Contains)) {
-            await Run("dotnet", ["build", w.Project(backend), "--no-restore"]);
+            await BuildTool(backend);
             var output = await Processes.Capture(
                 "dotnet",
-                [w.Assembly(backend), "yard", "db", "status"],
+                [ToolAssembly(backend), "db", "status"],
                 w.Root,
                 ct,
                 Env(backend)
@@ -601,6 +612,8 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
                 check ? "--check" : "--write",
                 "apps/**/*.ts",
                 "apps/**/*.tsx",
+                "!apps/**/bin/**",
+                "!apps/**/obj/**",
                 "packages/**/*.ts",
                 "packages/**/*.tsx",
                 "packages/**/*.css",
@@ -640,18 +653,16 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
     }
 
     private async Task TestBackend(string app, string project) {
-        var root = Path.Combine(w.State, "tests", Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(w.Root, ".temp", "yard-tests", Guid.NewGuid().ToString("N"));
         var fixture = new Workspace(root, w.Definition);
         var settings = LocalSettings.Configure(fixture);
         var tools = new Commands(fixture, ct);
         var env = Env(app);
-        env["Yard__ConnectionString"] = settings.Connections[app];
-        env["Yard__VerificationKey"] = settings.VerificationKey;
-        env["YARD_TESTING"] = "1";
+        env["ConnectionStrings__Default"] = settings.Connections[app];
         try {
             await tools.DatabaseHost("up", settings);
-            await Run("dotnet", ["build", w.Project(app), "--no-restore"]);
-            await Run("dotnet", [w.Assembly(app), "yard", "db", "migrate"], env);
+            await BuildTool(app);
+            await Run("dotnet", [ToolAssembly(app), "db", "migrate"], env);
             await Run("dotnet", ["test", project, "--no-restore"], env);
         }
         finally {
@@ -669,27 +680,29 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
     }
 
     public async Task Contracts(bool check) {
-        // Capture OpenAPI from management mode: no HTTP listener or background tasks.
-        await Run("dotnet", ["build", w.Project("api"), "--no-restore"]);
+        // Export from a separate tool process: no HTTP listener or hosted services.
+        await BuildTool("api");
         var contractEnv = Env("api");
-        contractEnv["Yard__ConnectionString"] =
+        contractEnv["ConnectionStrings__Default"] =
             w.Definition.Database == "sqlite"
                 ? "Data Source=:memory:"
                 : "Host=localhost;Database=yard_design;Username=yard;Password=design-only";
-        contractEnv["Yard__VerificationKey"] = Convert.ToBase64String(new byte[32]);
         var json = await Processes.Capture(
             "dotnet",
-            [w.Assembly("api"), "yard", "contracts"],
+            [ToolAssembly("api"), "contracts"],
             w.Root,
             ct,
             contractEnv
         );
         using var doc = JsonDocument.Parse(json);
         if (
-            !doc.RootElement.TryGetProperty("paths", out var paths)
-            || !paths.EnumerateObject().Any()
+            !doc.RootElement.TryGetProperty("openapi", out _)
+            || (
+                doc.RootElement.TryGetProperty("paths", out var paths)
+                && paths.ValueKind != JsonValueKind.Object
+            )
         )
-            throw new YardException("OpenAPI export contained no endpoints.");
+            throw new YardException("Invalid OpenAPI document.");
         var normalized = JsonSerializer.Serialize(doc.RootElement, Workspace.Json) + "\n";
         var schema = Path.Combine(w.Root, "packages", "api-client", "openapi.json");
         var output = Path.Combine(w.Root, "packages", "api-client", "src", "generated.ts");
@@ -739,7 +752,8 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         await Doctor();
         await Engineering("check", null);
         var path = Path.Combine(
-            w.State,
+            w.Root,
+            ".temp",
             "verification",
             DateTime.UtcNow.ToString("yyyyMMddHHmmss") + "-" + Guid.NewGuid().ToString("N")[..6]
         );
@@ -768,46 +782,10 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         var fixture = Workspace.Load(path);
         var commands = new Commands(fixture, ct);
         System.Diagnostics.Process? host = null;
-        System.Diagnostics.Process? provider = null;
         Task<string>? hostOutput = null;
         Task<string>? hostErrors = null;
         try {
             await commands.Initialize();
-            var providerPort = LocalSettings.FreePort();
-            var providerUrl = "http://127.0.0.1:" + providerPort;
-            var mockStart = new System.Diagnostics.ProcessStartInfo("node") {
-                WorkingDirectory = path,
-                UseShellExecute = false,
-            };
-            mockStart.ArgumentList.Add("tests/github-provider.mjs");
-            mockStart.ArgumentList.Add(providerPort.ToString());
-            provider =
-                System.Diagnostics.Process.Start(mockStart)
-                ?? throw new YardException("Could not start GitHub protocol fixture.");
-            var configPath = Path.Combine(fixture.State, "appsettings.local.json");
-            var privateConfig = System.Text.Json.Nodes.JsonNode.Parse(
-                File.ReadAllText(configPath)
-            )!;
-            privateConfig["Yard"]!["GitHub"] = System.Text.Json.JsonSerializer.SerializeToNode(
-                new {
-                    Enabled = true,
-                    ClientId = "stub-client",
-                    ClientSecret = "stub-secret",
-                    DevelopmentServer = providerUrl,
-                }
-            );
-            File.WriteAllText(configPath, privateConfig.ToJsonString());
-            var password =
-                Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(20))
-                + "aA1!";
-            await Processes.Run(
-                "dotnet",
-                [fixture.Assembly("api"), "yard", "user", "bootstrap", "yard-verifier"],
-                path,
-                ct,
-                commands.Env("api"),
-                password + "\n"
-            );
             var port = LocalSettings.FreePort();
             var url = "http://localhost:" + port;
             var start = new System.Diagnostics.ProcessStartInfo("dotnet") {
@@ -820,11 +798,6 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
             start.ArgumentList.Add("dev");
             start.Environment["YARD_PORT"] = port.ToString();
             start.Environment["YARD_LOCAL_EXECUTION"] = "1";
-            start.Environment["Yard__Mail__Host"] = "";
-            start.Environment["Yard__GitHub__Enabled"] = "true";
-            start.Environment["Yard__GitHub__ClientId"] = "stub-client";
-            start.Environment["Yard__GitHub__ClientSecret"] = "stub-secret";
-            start.Environment["Yard__GitHub__DevelopmentServer"] = providerUrl;
             host =
                 System.Diagnostics.Process.Start(start)
                 ?? throw new YardException("Could not start the isolated verification host.");
@@ -834,7 +807,7 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
             var ready = false;
             for (var i = 0; i < 180 && !host.HasExited; i++) {
                 try {
-                    using var response = await http.GetAsync(url + "/api/auth/options", ct);
+                    using var response = await http.GetAsync(url + "/health/ready", ct);
                     if (response.IsSuccessStatusCode) {
                         ready = true;
                         break;
@@ -850,10 +823,7 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
             await Processes.Run("pnpm", ["exec", "playwright", "install", "chromium"], path, ct);
             var env = new Dictionary<string, string?> {
                 ["YARD_VERIFY_URL"] = url,
-                ["YARD_GITHUB_TEST_URL"] = providerUrl,
                 ["YARD_VERIFY_ISOLATED"] = "1",
-                ["YARD_VERIFY_USERNAME"] = "yard-verifier",
-                ["YARD_VERIFY_PASSWORD"] = password,
             };
             foreach (var project in new[] { "desktop", "mobile" }) {
                 if (project == "mobile") {
@@ -988,11 +958,6 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
                     await hostOutput + await hostErrors
                 );
             host?.Dispose();
-            if (provider is { HasExited: false }) {
-                provider.Kill(entireProcessTree: true);
-                await provider.WaitForExitAsync();
-            }
-            provider?.Dispose();
         }
     }
 }

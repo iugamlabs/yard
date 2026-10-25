@@ -1,100 +1,40 @@
-import type { paths, components } from './generated';
+import type { components } from './generated';
 export type { paths, components } from './generated';
-export type User = components['schemas']['UserView'];
-export interface Organization {
-  id: string;
-  name: string;
-  ownerId: string;
-  archived: boolean;
-}
-let token = '';
+export type Note = components['schemas']['NoteView'];
 export class ApiError extends Error {
   constructor(
     public status: number,
-    public code: string,
+    message: string,
   ) {
-    super(code);
+    super(message);
   }
 }
-export async function csrf() {
-  const r = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
-  token = (await r.json()).token;
-  return token;
-}
-export async function api<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  if (method !== 'GET' && !token) await csrf();
-  const r = await fetch('/api' + path, {
+export async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  const response = await fetch('/api' + path, {
     method,
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(method === 'GET' ? {} : { 'X-CSRF-TOKEN': token }),
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (r.status === 401) token = '';
-  if (!r.ok) {
-    let code = r.statusText;
+  if (!response.ok) {
+    let message = response.statusText;
     try {
-      code = (await r.json()).errorCode ?? code;
+      const problem = await response.json();
+      message =
+        Object.values(problem.errors ?? {})
+          .flat()
+          .join(' ') ||
+        problem.detail ||
+        problem.title ||
+        message;
     } catch {
-      /* HTTP without JSON */
+      /* Non-JSON server error. */
     }
-    throw new ApiError(r.status, code);
+    throw new ApiError(response.status, message);
   }
-  if (
-    ['/auth/login', '/auth/logout', '/auth/register', '/auth/external/registration'].includes(path)
-  )
-    token = '';
-  return r.status === 204 ? (undefined as T) : r.json();
+  return response.status === 204 ? (undefined as T) : response.json();
 }
-export async function externalForm(action: 'login' | 'link', password = '') {
-  const t = await csrf();
-  const f = document.createElement('form');
-  f.method = 'POST';
-  f.action = '/api/auth/external/github/' + action;
-  for (const [name, value] of Object.entries({ __RequestVerificationToken: t, password })) {
-    const i = document.createElement('input');
-    i.type = 'hidden';
-    i.name = name;
-    i.value = value;
-    f.append(i);
-  }
-  document.body.append(f);
-  f.submit();
-}
-
-// Requests derive their payload from the exported server contract. Low-level api<T>
-// remains available for business modules while their endpoints are being added.
-export const identity = {
-  me: () => api<User>('/auth/me'),
-  register: (body: components['schemas']['RegisterBody']) => api('/auth/register', 'POST', body),
-  login: (body: components['schemas']['LoginBody']) =>
-    api<{ mustChangePassword: boolean }>('/auth/login', 'POST', body),
-  changePassword: (body: components['schemas']['PasswordBody']) =>
-    api<void>('/auth/change-password', 'POST', body),
-  requestEmail: (body: components['schemas']['EmailRequestBody']) =>
-    api<{ challengeId: string; expiresIn: number; retryAfter: number }>(
-      '/auth/email/request',
-      'POST',
-      body,
-    ),
-  verifyEmail: (body: components['schemas']['EmailVerifyBody']) =>
-    api<{ verified: boolean; signInAgain: boolean }>('/auth/email/verify', 'POST', body),
+export const notes = {
+  list: () => request<Note[]>('/notes/'),
+  create: (body: components['schemas']['CreateNote']) => request<Note>('/notes/', 'POST', body),
+  delete: (id: Note['id']) => request<void>('/notes/' + encodeURIComponent(id), 'DELETE'),
 };
-type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
-type Operation<P extends keyof paths, M extends HttpMethod> = M extends keyof paths[P]
-  ? NonNullable<paths[P][M]>
-  : never;
-type Body<O> = O extends { requestBody: { content: { 'application/json': infer T } } } ? T : never;
-export async function contractRequest<P extends keyof paths, M extends HttpMethod>(
-  path: P,
-  method: M,
-  options: { body?: Body<Operation<P, M>>; path?: Record<string, string> } = {},
-): Promise<unknown> {
-  let url: string = path;
-  for (const [key, value] of Object.entries(options.path ?? {}))
-    url = url.replace('{' + key + '}', encodeURIComponent(value));
-  if (url.includes('{')) throw new Error('Missing API path parameter');
-  return api(url.replace(/^\/api/, ''), method.toUpperCase(), options.body);
-}

@@ -37,6 +37,23 @@
         "toLower": true
       },
       "replaces": "yardapp"
+    },
+    "providerPackage": {
+      "type": "generated",
+      "generator": "switch",
+      "parameters": {
+        "cases": [
+          {
+            "condition": "(database == \"sqlite\")",
+            "value": "Microsoft.EntityFrameworkCore.Sqlite"
+          },
+          {
+            "condition": "(database == \"postgresql\")",
+            "value": "Npgsql.EntityFrameworkCore.PostgreSQL"
+          }
+        ]
+      },
+      "replaces": "__PROVIDER_PACKAGE__"
     }
   },
   "sources": [
@@ -46,8 +63,19 @@
         "**/obj/**",
         "**/node_modules/**",
         ".template.config/**",
-        "**/.DS_Store"
+        "**/.DS_Store",
+        "providers/**"
       ]
+    },
+    {
+      "source": "providers/sqlite",
+      "target": "apps/api",
+      "condition": "(database == \"sqlite\")"
+    },
+    {
+      "source": "providers/postgresql",
+      "target": "apps/api",
+      "condition": "(database == \"postgresql\")"
     }
   ]
 }

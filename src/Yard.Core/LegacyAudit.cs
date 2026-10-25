@@ -4,7 +4,7 @@ public static class LegacyAudit {
     public static string[] Inspect(string root) {
         var items = new List<string>
         {
-            "Missing yard.json schema 1: adopt the fixed name/version/database/application topology manifest.",
+            "Missing yard.json schema 2: adopt the fixed name/version/database/application topology manifest.",
         };
         if (!Directory.Exists(Path.Combine(root, "apps", "api")))
             items.Add(
@@ -20,11 +20,11 @@ public static class LegacyAudit {
                     file
                         + " exists: move development commands to Yard after reviewing equivalent behavior."
                 );
-        foreach (var package in new[] { "ui", "api-client", "platform" })
+        foreach (var package in new[] { "ui", "api-client" })
             if (!Directory.Exists(Path.Combine(root, "packages", package)))
                 items.Add("Missing shared packages/" + package + ".");
         items.Add(
-            "Review provider-specific EF migrations, fixed SDK/pnpm tools, organization isolation and standard account/mail configuration against a generated reference. No business code, configuration or database was changed."
+            "Review the selected EF provider and migration chain, fixed SDK/pnpm tools and standard connection-string configuration against a generated reference. No business code, configuration or database was changed."
         );
         return items.ToArray();
     }

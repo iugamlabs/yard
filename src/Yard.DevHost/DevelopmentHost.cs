@@ -61,16 +61,9 @@ public static class DevelopmentHost {
             var backend = builder
                 .AddExecutable(name, "dotnet", w.Root, assembly, "--watch", name)
                 .WithEnvironment("Logging__LogLevel__Default", "Warning")
-                .WithEnvironment("YARD_ROOT", w.Root)
-                .WithEnvironment("YARD_APP", name)
-                .WithEnvironment("YARD_DATABASE", w.Definition.Database)
-                .WithEnvironment("Yard__Database", w.Definition.Database)
-                .WithEnvironment("Yard__ConnectionString", settings.Connections[name])
-                .WithEnvironment("Yard__VerificationKey", settings.VerificationKey)
-                .WithEnvironment("Yard__KeysDirectory", Path.Combine(w.State, "keys", name))
+                .WithEnvironment("ConnectionStrings__Default", settings.Connections[name])
                 .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
                 .WithEnvironment("ASPNETCORE_URLS", "http://127.0.0.1:" + settings.Ports[name])
-                .WithEnvironment("Yard__PublicOrigin", "http://localhost:" + gatewayPort)
                 .WithHttpEndpoint(
                     port: settings.Ports[name],
                     targetPort: settings.Ports[name],
@@ -84,7 +77,7 @@ public static class DevelopmentHost {
                 if (backends.TryGetValue(dependency, out var target)) {
                     backend.WaitFor(target);
                     backend.WithEnvironment(
-                        "Yard__Services__" + dependency,
+                        "Services__" + dependency,
                         "http://127.0.0.1:" + settings.Ports[dependency]
                     );
                 }
@@ -408,6 +401,8 @@ public static class DevelopmentHost {
         }
         b.Services.AddReverseProxy().LoadFromMemory(routes, clusters);
         var app = b.Build();
+        if (!selected.Contains("admin"))
+            app.Map("/admin/{**rest}", () => Results.NotFound());
         app.MapReverseProxy();
         await app.RunAsync();
     }

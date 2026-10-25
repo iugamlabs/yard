@@ -15,7 +15,6 @@ public sealed record LocalSettings {
     public Dictionary<string, string> Connections { get; init; } = [];
     public string DatabasePassword { get; init; } = "";
     public int DatabasePort { get; init; }
-    public string VerificationKey { get; init; } = "";
 
     public static string PathFor(Workspace w) => Path.Combine(w.State, "settings.json");
 
@@ -85,9 +84,6 @@ public sealed record LocalSettings {
             Connections = connections,
             DatabasePassword = password,
             DatabasePort = dbPort,
-            VerificationKey =
-                existing?.VerificationKey
-                ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
         };
         File.WriteAllText(PathFor(w), JsonSerializer.Serialize(settings, Workspace.Json) + "\n");
         if (!OperatingSystem.IsWindows())

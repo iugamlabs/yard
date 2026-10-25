@@ -1,12 +1,9 @@
-using Yard.AspNetCore;
 using YardApp.Api.Hosting;
 
-var builder = WebApplication.CreateBuilder(args.FirstOrDefault() == "yard" ? [] : args);
+var builder = WebApplication.CreateBuilder(args);
 builder.AddApplication();
 var app = builder.Build();
-app.UseYard();
-if (await app.RunYardCommandAsync(args))
-    return;
+app.UseApplication();
 app.Run();
 
 public partial class Program;

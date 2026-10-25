@@ -1,6 +1,6 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/Yard.AspNetCore/Yard.AspNetCore.csproj" />
+    <Project Path="src/Yard.DotNet/Yard.DotNet.csproj" />
     <Project Path="src/Yard.Cli/Yard.Cli.csproj" />
     <Project Path="src/Yard.Core/Yard.Core.csproj" />
     <Project Path="src/Yard.DevHost/Yard.DevHost.csproj" />

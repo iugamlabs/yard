@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 namespace Yard;
 
 public sealed record WorkspaceDefinition {
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = 2;
     public string Name { get; init; } = "";
     public string ToolVersion { get; init; } = Versions.Yard;
     public string Database { get; init; } = "postgresql";
@@ -17,7 +17,7 @@ public sealed record WorkspaceDefinition {
 }
 
 public static class Versions {
-    public const string Yard = "0.1.0";
+    public const string Yard = "0.2.0";
     public const string Dotnet = "10.0.400";
     public const string Ef = "10.0.13";
     public const string Aspire = "13.6.3";
@@ -63,16 +63,20 @@ public sealed class Workspace(string root, WorkspaceDefinition definition) {
     public static string Pascal(string text) =>
         string.Concat(text.Split('-').Select(x => char.ToUpperInvariant(x[0]) + x[1..]));
 
-    public static Workspace Find(string? from = null) {
-        var p = new DirectoryInfo(Path.GetFullPath(from ?? Environment.CurrentDirectory));
-        while (p != null) {
-            if (File.Exists(Path.Combine(p.FullName, "yard.json")))
-                return Load(p.FullName);
-            p = p.Parent;
-        }
-        throw new YardException(
+    public static Workspace Find(string? from = null) =>
+        TryFind(from)
+        ?? throw new YardException(
             "No yard.json found. Run yard new <Name>, or yard init in a standard repository."
         );
+
+    public static Workspace? TryFind(string? from = null) {
+        var directory = new DirectoryInfo(Path.GetFullPath(from ?? Environment.CurrentDirectory));
+        while (directory != null) {
+            if (File.Exists(Path.Combine(directory.FullName, "yard.json")))
+                return Load(directory.FullName);
+            directory = directory.Parent;
+        }
+        return null;
     }
 
     public static Workspace Load(string root) {
@@ -107,9 +111,9 @@ public sealed class Workspace(string root, WorkspaceDefinition definition) {
                 "yard.json fields and application identifiers cannot be null.",
                 2
             );
-        if (Definition.SchemaVersion != 1)
+        if (Definition.SchemaVersion != 2)
             throw new YardException(
-                $"Unsupported schema {Definition.SchemaVersion}; this Yard supports schema 1.",
+                $"Unsupported schema {Definition.SchemaVersion}; Yard 0.2 requires schema 2; automatic upgrades from the SaaS template are not supported. No files or databases were changed.",
                 2
             );
         if (!Regex.IsMatch(Definition.Name, "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$"))

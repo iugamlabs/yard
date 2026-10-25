@@ -1,36 +1,25 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Yard.AspNetCore;
+using YardApp.Api.Modules.Notes;
 
 namespace YardApp.Api.Infrastructure;
 
-public abstract class AppDbContext(DbContextOptions options, OrganizationScope scope)
-    : YardDbContext(options, scope);
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options) {
+    public DbSet<Note> Notes => Set<Note>();
 
-public sealed class SqliteAppDbContext(
-    DbContextOptions<SqliteAppDbContext> options,
-    OrganizationScope scope
-) : AppDbContext(options, scope);
-
-public sealed class PostgresAppDbContext(
-    DbContextOptions<PostgresAppDbContext> options,
-    OrganizationScope scope
-) : AppDbContext(options, scope);
-
-public sealed class SqliteDesignFactory : IDesignTimeDbContextFactory<SqliteAppDbContext> {
-    public SqliteAppDbContext CreateDbContext(string[] args) {
-        var o = new DbContextOptionsBuilder<SqliteAppDbContext>().UseSqlite("Data Source=:memory:");
-        o.UseOpenIddict();
-        return new(o.Options, new OrganizationScope());
-    }
+    protected override void OnModelCreating(ModelBuilder model) =>
+        model.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 }
 
-public sealed class PostgresDesignFactory : IDesignTimeDbContextFactory<PostgresAppDbContext> {
-    public PostgresAppDbContext CreateDbContext(string[] args) {
-        var o = new DbContextOptionsBuilder<PostgresAppDbContext>().UseNpgsql(
-            "Host=localhost;Database=yard_design;Username=yard;Password=design-only"
-        );
-        o.UseOpenIddict();
-        return new(o.Options, new OrganizationScope());
+public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext> {
+    public AppDbContext CreateDbContext(string[] args) {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: true)
+            .AddEnvironmentVariables()
+            .Build();
+        var options = new DbContextOptionsBuilder<AppDbContext>();
+        DatabaseConfiguration.Configure(options, configuration);
+        return new(options.Options);
     }
 }

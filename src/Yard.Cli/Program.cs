@@ -182,36 +182,6 @@ foreach (
     db.Add(sub);
 }
 root.Add(db);
-var user = new Command("user", "Manage accounts without starting the web server");
-foreach (
-    var action in new[]
-    {
-        "bootstrap",
-        "create",
-        "list",
-        "enable",
-        "disable",
-        "reset-password",
-        "revoke-sessions",
-    }
-) {
-    var sub = new Command(action);
-    var username = new Argument<string?>("username") {
-        Arity = action == "list" ? ArgumentArity.ZeroOrOne : ArgumentArity.ExactlyOne,
-    };
-    var stdin = new Option<bool>("--password-stdin");
-    sub.Add(username);
-    sub.Add(stdin);
-    sub.SetAction(async p =>
-        await new Commands(Workspace.Find(), cancel.Token).User(
-            action,
-            p.GetValue(username),
-            p.GetValue(stdin)
-        )
-    );
-    user.Add(sub);
-}
-root.Add(user);
 var sync = new Command("sync", "Synchronize tool-owned files");
 sync.Add(checkOption);
 sync.SetAction(p => {
@@ -256,16 +226,29 @@ upgrade.SetAction(p => {
 });
 root.Add(upgrade);
 try {
+    var config = new InvocationConfiguration { EnableDefaultExceptionHandler = false };
+    var parsed = root.Parse(args);
+    if (parsed.Errors.Count > 0) {
+        if (args.Contains("--json"))
+            Console.Error.WriteLine(
+                JsonSerializer.Serialize(
+                    new {
+                        code = "invalid_arguments",
+                        message = string.Join("; ", parsed.Errors.Select(x => x.Message)),
+                        exitCode = 2,
+                    }
+                )
+            );
+        else
+            await parsed.InvokeAsync(config, cancel.Token);
+        return 2;
+    }
     // The global command is only a launcher inside a repository; a guard prevents delegation loops.
     if (
         Environment.GetEnvironmentVariable("YARD_LOCAL_EXECUTION") != "1"
         && args.FirstOrDefault() is not ("new" or "version" or "--help" or "-h")
     ) {
-        Workspace? w = null;
-        try {
-            w = Workspace.Find();
-        }
-        catch (YardException) { }
+        var w = Workspace.TryFind();
         if (w != null) {
             if (args.FirstOrDefault() is "install" or "init") {
                 Templates.Feed(w);
@@ -306,32 +289,12 @@ try {
         args.FirstOrDefault() == "init"
         && !File.Exists(Path.Combine(Environment.CurrentDirectory, "yard.json"))
     ) {
-        try {
-            _ = Workspace.Find();
-        }
-        catch (YardException) {
+        if (Workspace.TryFind() == null) {
             Console.Error.WriteLine("Existing repository audit (no changes):");
             foreach (var issue in LegacyAudit.Inspect(Environment.CurrentDirectory))
                 Console.Error.WriteLine("- " + issue);
             return 2;
         }
-    }
-    var config = new InvocationConfiguration { EnableDefaultExceptionHandler = false };
-    var parsed = root.Parse(args);
-    if (parsed.Errors.Count > 0) {
-        if (args.Contains("--json"))
-            Console.Error.WriteLine(
-                JsonSerializer.Serialize(
-                    new {
-                        code = "invalid_arguments",
-                        message = string.Join("; ", parsed.Errors.Select(x => x.Message)),
-                        exitCode = 2,
-                    }
-                )
-            );
-        else
-            await parsed.InvokeAsync(config, cancel.Token);
-        return 2;
     }
     return await parsed.InvokeAsync(config, cancel.Token);
 }

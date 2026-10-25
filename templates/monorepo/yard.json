@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "name": "YardApp",
-  "toolVersion": "0.1.0",
+  "toolVersion": "0.2.0",
   "database": "__DATABASE__",
   "backends": [
     "api"

@@ -1,21 +1,19 @@
 {
   "name": "@yard/web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --strictPort",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "dependencies": {
     "@yard/ui": "workspace:*",
     "@yard/api-client": "workspace:*",
-    "@yard/platform": "workspace:*",
     "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "react-router-dom": "7.18.4"
+    "react-dom": "19.3.0"
   }
 }

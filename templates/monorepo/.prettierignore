@@ -2,3 +2,5 @@
 **/dist/
 **/generated.ts
 pnpm-lock.yaml
+.temp/
+providers/

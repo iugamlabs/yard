@@ -6,7 +6,7 @@ export default defineConfig({
   retries: 0,
   timeout: 45000,
   reporter: [['list']],
-  outputDir: '../.yard/browser-results',
+  outputDir: '../.temp/browser-results',
   use: {
     baseURL: process.env.YARD_VERIFY_URL ?? 'http://localhost:8080',
     screenshot: 'only-on-failure',
