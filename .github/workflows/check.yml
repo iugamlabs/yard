@@ -17,7 +17,7 @@ jobs:
       - run: dotnet tool restore
       - run: dotnet restore Yard.slnx --locked-mode
       - run: dotnet build Yard.slnx --no-restore
-      - run: dotnet test tests/Yard.Tests --no-build
+      - run: dotnet test Yard.slnx --no-build
       - run: python scripts/format_csharp.py --check
   packages:
     runs-on: ubuntu-latest
@@ -31,13 +31,14 @@ jobs:
           node-version: '24.18.0'
       - run: npm install -g pnpm@12.11.2
       - run: python3 scripts/pack.py
-      - run: dotnet tool install Iugam.Yard.Cli --version 0.1.0 --tool-path .temp/tools --add-source .temp/feed
+      - run: dotnet tool install Iugam.Yard.Cli --version 0.2.0 --tool-path .temp/tools --add-source .temp/feed
       - run: python3 scripts/acceptance.py --tool .temp/tools/yard --database sqlite
       - run: python3 scripts/acceptance.py --tool .temp/tools/yard --database postgresql --multi
+      - run: python3 scripts/acceptance.py --tool .temp/tools/yard --database sqlite --backends 2 --frontends 2 --skip-browser
       - run: python3 scripts/process_acceptance.py --tool .temp/tools/yard
       - name: Verify native dotnet template
         run: |
-          dotnet new install "$PWD/.temp/feed/Iugam.Yard.Templates.0.1.0.nupkg" --debug:custom-hive "$PWD/.temp/template-hive"
+          dotnet new install "$PWD/.temp/feed/Iugam.Yard.Templates.0.2.0.nupkg" --debug:custom-hive "$PWD/.temp/template-hive"
           dotnet new yard-mono -n NativeExample --database sqlite -o .temp/native --debug:custom-hive "$PWD/.temp/template-hive"
           cd .temp/native
           ../tools/yard init

@@ -17,6 +17,6 @@ jobs:
       - name: Restore the private Yard distribution
         run: |
           test -n "$YARD_NUGET_SOURCE" || { echo 'Set YARD_NUGET_SOURCE to your private feed or downloaded local package directory.'; exit 1; }
-          dotnet tool install Iugam.Yard.Cli --version 0.1.0 --tool-path .yard/bootstrap --add-source "$YARD_NUGET_SOURCE"
+          dotnet tool install Iugam.Yard.Cli --version 0.2.0 --tool-path .yard/bootstrap --add-source "$YARD_NUGET_SOURCE"
           .yard/bootstrap/yard install
       - run: dotnet yard check
