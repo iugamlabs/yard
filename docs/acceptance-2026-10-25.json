@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-25",
+  "version": "0.2.0",
+  "schema": 2,
+  "platform": "Linux",
+  "sourceTests": 34,
+  "frontendTestsPerApplication": 4,
+  "browserTestsPerProvider": 6,
+  "suites": {
+    "sqlite": {
+      "passed": true,
+      "checks": 55,
+      "results": ".temp/acceptance/sqlite-b794dc8d/results.json"
+    },
+    "postgresql": {
+      "passed": true,
+      "checks": 59,
+      "results": ".temp/acceptance/postgresql-b1ba3065/results.json"
+    },
+    "sqlite-multi": {
+      "passed": true,
+      "checks": 58,
+      "results": ".temp/acceptance/sqlite-e3581764/results.json"
+    },
+    "process": {
+      "passed": true,
+      "checks": 25,
+      "results": ".temp/process-acceptance/7a450283/results.json"
+    }
+  },
+  "nativeTemplate": {
+    "passed": true,
+    "log": ".temp/final-0.2.0/native.log"
+  },
+  "sourceChecks": {
+    "build": ".temp/final-0.2.0/build.log",
+    "test": ".temp/final-0.2.0/test.log",
+    "format": ".temp/final-0.2.0/format.log"
+  },
+  "tool": ".temp/final-0.2.0/tools/yard",
+  "cliHome": ".temp/final-0.2.0/home",
+  "packageCache": ".temp/final-0.2.0/packages",
+  "packages": {
+    "Iugam.Yard.Cli.0.2.0.nupkg": "7486ba7df7073fdad290f4a7c106e9b9cd5c5d2cb8b6335427d2725ba687c4a5",
+    "Iugam.Yard.Core.0.2.0.nupkg": "0850448cada3a085d6582dc5c80af303160872d01f9548d1c792cfef5e2fa638",
+    "Iugam.Yard.DevHost.0.2.0.nupkg": "590e5f02d84fa9cdfd2490692f382d8425550a235fa85d6500c07eda4064357e",
+    "Iugam.Yard.DotNet.0.2.0.nupkg": "226364589bb5c73f69479d978b687cd48c3efac454844299576394c5877ec225",
+    "Iugam.Yard.Templates.0.2.0.nupkg": "b674426b08428f70a3d4b2761d5419ee0c2856cd61e91163e7563ca92f86337a"
+  },
+  "notExecuted": [
+    "macOS",
+    "Windows"
+  ],
+  "remotePublication": false
+}
