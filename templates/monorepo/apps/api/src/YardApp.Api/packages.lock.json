@@ -6,7 +6,7 @@
         "type": "Direct",
         "requested": "[0.1.0, )",
         "resolved": "0.1.0",
-        "contentHash": "nJLo/s8Fcsi8y6qOtLMR3nqaMxfWw8UlT9d6X98RcV/l9Y/zcWIRyfdNi8XER3cF85gV37zW/1OZ8ymBaMvC+Q==",
+        "contentHash": "3l6XihOXJCjB9gmy+20fs6OXtERoCIFirRk6nogINY9emgMga7B9i32OPiDvJIUebu2UMqVyDf/rZLFjf9bNXw==",
         "dependencies": {
           "MailKit": "4.18.1",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "10.0.13",
