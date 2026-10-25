@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Installed-tool checkout, cookie, port and Ctrl+C acceptance (POSIX host)."""
+"""Installed-tool checkout, data, port and Ctrl+C acceptance (POSIX host)."""
 import argparse
 import hashlib
 import json
@@ -61,7 +61,6 @@ try:
     for i, app in enumerate(apps):
         run('new-' + str(i), ROOT, 'new', 'ParallelProject', '--database', 'sqlite', '--output', str(app))
         run('init-' + str(i), app, 'init')
-        run('bootstrap-' + str(i), app, 'user', 'bootstrap', 'owner' + str(i), '--password-stdin', input='Parallel-password-123\n')
     settings = [json.loads((a / '.yard/settings.json').read_text()) for a in apps]
     record('separate-identities', settings[0]['identity'] != settings[1]['identity'])
     record('separate-databases', settings[0]['connections']['api'] != settings[1]['connections']['api'])
@@ -83,35 +82,24 @@ try:
     for url, host in zip(urls, hosts):
         ready(url, host)
     record('parallel-ready', True)
-    js = apps[0] / '.yard/cookie-check.mjs'
-    js.write_text('''import { chromium } from '@playwright/test';
-import { spawnSync } from 'node:child_process';
-const [a,b,tool,root]=process.argv.slice(2);
-const browser=await chromium.launch({headless:true});
-try {
- const context=await browser.newContext(); const pages=[await context.newPage(),await context.newPage()];
- for(let i=0;i<2;i++) {
-  await pages[i].goto([a,b][i]+'/login');
-  const result=await pages[i].evaluate(async i=>{
-   const {token}=await (await fetch('/api/auth/csrf')).json();
-   return (await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':token},body:JSON.stringify({identifier:'owner'+i,password:'Parallel-password-123'})})).status;
-  },i);
-  if(result!==200) throw Error('login failed '+result);
- }
- for(let i=0;i<2;i++) {
-  const user=await pages[i].evaluate(async()=> (await fetch('/api/auth/me')).json());
-  if(user.username!=='owner'+i) throw Error('cookie crossed checkout boundary');
- }
- const stop=spawnSync(tool,['dev','stop'],{cwd:root,encoding:'utf8',timeout:45000});
- if(stop.status!==0) throw Error(stop.stderr);
- const user=await pages[1].evaluate(async()=> (await fetch('/api/auth/me')).json());
- if(user.username!=='owner1') throw Error('independent stop disrupted second checkout');
- console.log('Shared browser cookies and independent stop passed');
-} finally {await browser.close();}
-''')
-    with (case / 'cookie-check.log').open('w') as output:
-        r = subprocess.run(['node', str(js), *urls, str(tool), str(apps[0])], cwd=apps[0], stdout=output, stderr=subprocess.STDOUT, timeout=90)
-    record('browser-cookie-isolation-and-independent-stop', r.returncode == 0)
+    try:
+        status = urllib.request.urlopen(urls[0] + '/admin/', timeout=5).status
+    except urllib.error.HTTPError as error:
+        status = error.code
+    record('undeclared-admin-is-not-a-platform-page', status == 404)
+
+    for i, url in enumerate(urls):
+        data = json.dumps({'text': 'Checkout ' + str(i)}).encode()
+        request = urllib.request.Request(url + '/api/notes/', data=data, headers={'Content-Type':'application/json'})
+        with urllib.request.urlopen(request) as response:
+            record('create-note-' + str(i), response.status == 201)
+    for i, url in enumerate(urls):
+        with urllib.request.urlopen(url + '/api/notes/') as response:
+            records = json.load(response)
+        record('isolated-data-' + str(i), len(records) == 1 and records[0]['text'] == 'Checkout ' + str(i))
+    run('independent-stop', apps[0], 'dev', 'stop')
+    with urllib.request.urlopen(urls[1] + '/api/notes/') as response:
+        record('independent-stop-preserves-second-checkout', json.load(response)[0]['text'] == 'Checkout 1')
     hosts[0].wait(timeout=30)
     record('second-checkout-survives', hosts[1].poll() is None)
     os.killpg(hosts[1].pid, signal.SIGINT)
