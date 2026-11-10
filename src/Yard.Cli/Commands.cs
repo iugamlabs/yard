@@ -79,12 +79,38 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         string? input = null
     ) => Processes.Run(file, args, w.Root, ct, env, input);
 
+    private Task FrontendTool(
+        string package,
+        string entrypoint,
+        IEnumerable<string> args,
+        string? directory = null
+    ) =>
+        Processes.Run(
+            "node",
+            [FrontendToolchain.Entrypoint(w, package, entrypoint), .. args],
+            directory ?? w.Root,
+            ct
+        );
+
     public async Task Build(string? app = null) {
+        RequireStructure();
         foreach (var a in w.Select(app)) {
             if (w.Definition.Backends.Contains(a))
                 await Run("dotnet", ["build", w.Project(a), "--no-restore"]);
-            else
-                await Run("pnpm", ["--dir", w.AppDirectory(a), "run", "build"]);
+            else {
+                await FrontendTool(
+                    "typescript",
+                    "bin/tsc",
+                    ["--noEmit", "--project", "tsconfig.json"],
+                    w.AppDirectory(a)
+                );
+                await FrontendTool(
+                    "vite",
+                    "bin/vite.js",
+                    ["build", "--config", "vite.config.ts"],
+                    w.AppDirectory(a)
+                );
+            }
         }
     }
 
@@ -136,12 +162,14 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
             await BuildTool(app);
         }
         await Run("pnpm", ["install", "--frozen-lockfile"]);
+        FrontendToolchain.ValidateInstalled(w);
     }
 
     public void RequireStructure() {
         var errors = w.StructureErrors();
         if (errors.Count > 0)
             throw new YardException(string.Join("\n", errors));
+        FrontendToolchain.Validate(w);
     }
 
     public async Task Initialize() {
@@ -600,15 +628,18 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
                 await CSharpFormatting.Run(w, check, file, ct);
                 return;
             }
-            await Run("pnpm", ["exec", "prettier", check ? "--check" : "--write", file]);
+            await FrontendTool(
+                "prettier",
+                "bin/prettier.cjs",
+                [check ? "--check" : "--write", file]
+            );
             return;
         }
         await CSharpFormatting.Run(w, check, null, ct);
-        await Run(
-            "pnpm",
+        await FrontendTool(
+            "prettier",
+            "bin/prettier.cjs",
             [
-                "exec",
-                "prettier",
                 check ? "--check" : "--write",
                 "apps/**/*.ts",
                 "apps/**/*.tsx",
@@ -635,7 +666,11 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
             return;
         }
         if (verb == "lint") {
-            await Run("pnpm", ["exec", "eslint", "apps", "packages", "--max-warnings", "0"]);
+            await FrontendTool(
+                "eslint",
+                "bin/eslint.js",
+                ["apps", "packages", "--max-warnings", "0"]
+            );
             return;
         }
         foreach (var a in w.Select(app)) {
@@ -647,8 +682,20 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
                     )
                         await TestBackend(a, p);
                 }
-            } else
-                await Run("pnpm", ["--dir", w.AppDirectory(a), "run", verb]);
+            } else if (verb == "typecheck")
+                await FrontendTool(
+                    "typescript",
+                    "bin/tsc",
+                    ["--noEmit", "--project", "tsconfig.json"],
+                    w.AppDirectory(a)
+                );
+            else if (verb == "test")
+                await FrontendTool(
+                    "vitest",
+                    "vitest.mjs",
+                    ["run", "--config", "vite.config.ts"],
+                    w.AppDirectory(a)
+                );
         }
     }
 
@@ -711,10 +758,14 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
         var input = Path.Combine(staging, "openapi.json");
         var generated = Path.Combine(staging, "generated.ts");
         File.WriteAllText(input, normalized);
-        await Run("pnpm", ["exec", "openapi-typescript", input, "--output", generated]);
+        await FrontendTool("openapi-typescript", "bin/cli.js", [input, "--output", generated]);
         var ignore = Path.Combine(staging, "empty.ignore");
         File.WriteAllText(ignore, "");
-        await Run("pnpm", ["exec", "prettier", "--write", generated, "--ignore-path", ignore]);
+        await FrontendTool(
+            "prettier",
+            "bin/prettier.cjs",
+            ["--write", generated, "--ignore-path", ignore]
+        );
         if (check) {
             if (
                 !File.Exists(schema)
@@ -745,6 +796,7 @@ public sealed class Commands(Workspace w, CancellationToken ct) {
             throw new YardException(
                 $"Expected dotnet {Versions.Dotnet}, Node {Versions.Node}, pnpm {Versions.Pnpm}; found {sdk}, {node}, {pnpm}."
             );
+        FrontendToolchain.ValidateInstalled(w);
         Console.WriteLine("Yard configuration, applications and toolchain are valid.");
     }
 
