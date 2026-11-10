@@ -1,45 +1,31 @@
-# 实现架构与扩展
+# Yard 0.2 实现架构与所有权
 
-## 包
+## 包和生产边界
 
-- Iugam.Yard.Cli：System.CommandLine 命令模型、Spectre.Console 输出、CliWrap 进程执行、隔离 Microsoft.TemplateEngine.IDE Bootstrapper。
-- Iugam.Yard.Core：严格清单、应用拓扑、固定版本、同步内容和 checkout 私有设置。
-- Iugam.Yard.AspNetCore：标准宿主、Identity、管理模式、邮件与验证码、OpenIddict Client、组织和 RBAC、EF 组织隔离约定。
-- Iugam.Yard.DevHost：忽略目录中的 Aspire 宿主支持、YARP 网关、受控 watch 生命周期、日志与状态控制。
-- Iugam.Yard.Templates：dotnet new yard-mono 模板，可独立安装。
+同版本分发五个开发工具包：Iugam.Yard.Cli、Core、DotNet、DevHost、Templates。CLI 携带其他工具包和标准模板；install 恢复本地固定工具与忽略的开发宿主。生产应用直接使用 ASP.NET Core、EF Core 和 OpenAPI，不引用 Yard 包、基类或管理入口，不读取 yard.json 或 .yard。账号、组织、租户隔离等业务能力由应用选择和维护；0.1 的 SaaS 运行库已删除。
 
-包同版本构建。CLI 包携带其他 Yard 包和模板内容；install 将其复制到项目本地忽略源，恢复仓库固定的本地工具。测试项目从真实 nupkg 安装，不允许用 ProjectReference 指向 Yard 仓库绕过分发链。
+每个后端只有一个生产项目，模块内聚合端点、契约、操作、实体和 EF 映射。AppDbContext 与标准设计时工厂共用数据库配置，连接字符串为 ConnectionStrings:Default。应用通过 AddApplication/UseApplication 组合服务与路由，不在组合阶段执行迁移、写种子或启动服务。默认 Notes 是可删除的示例。
 
-## 后端接入
+数据库和契约操作由 .yard/tools/<app> 的独立辅助控制台执行。它引用应用与 Iugam.Yard.DotNet，应用不反向引用工具。数据库操作不执行应用入口；契约导出建立路由，但不启动 HTTP、后台服务或数据库。
 
-模板 AppDbContext 继承 YardDbContext，SqliteAppDbContext、PostgresAppDbContext 有独立设计工厂和迁移目录。Hosting/ApplicationHosting.cs 选择固定数据库模式并将业务 AppDbContext 注册到同一 scoped 实例。Program 按序装配标准宿主、模块端点和管理模式。
+## 工程配置和前端命令
 
-业务模块在 Modules 下聚合端点、契约、操作、实体和映射；不恢复 Core/Persistence/Adapters/Worker 多生产项目。注册 IYardPermissionProvider 扩展组织权限目录，所有者自动拥有目录中的全部权限。标准命令和身份流程不能通过配置替换。
+应用清单只描述拓扑。sync 管理解决方案、workspace、本地工具、SDK、排版/lint、Vite、TypeScript 和 Tailwind 扫描配置；业务源码、迁移、测试和业务依赖归项目所有。Tailwind 只扫描声明的前端 src 与共享 UI。
 
-组织操作示例：先 `await authorization.Require(http, organizationId, "notes.read")`，再查询注入的 AppDbContext。业务实体实现 IOrganizationEntity；模型最终化会追加 Yard.Organization 过滤，不依赖业务 OnModelCreating 的注册顺序。写入检查活动上下文、原始 OrganizationId 与新值；EF 将组织标识放入并发条件。组织内的复合外键也要包含 OrganizationId。平台后台跨组织操作须显式检查 Admin 并记录操作者，不能靠伪造成员完成授权。
+前端标准命令直接通过 Node 执行仓库根 node_modules 中的固定工具：build 为 TypeScript 检查后运行 Vite，typecheck 使用固定项目配置，test 执行 Vitest，lint 执行 ESLint。显式使用受控 Vite 配置，避免旁路配置改变测试或构建入口。fmt 和 contracts 也使用固定的仓库根工具。package.json scripts 仅供项目的原生命令使用，不能改变 Yard 的标准行为。
 
-管理模式在 WebApplication 建立服务和端点后、Run 之前执行并退出；不会启动 WebApplication、后台服务或监听器。数据库操作通过当前具体 DbContext，OpenAPI 从服务图导出。
+根 package.json 的 packageManager、Node 版本及标准 devDependencies 必须与 Yard 模板一致；前端和共享包不能声明其他版本来覆盖标准工具或插件。可以增加业务依赖和额外开发依赖。doctor 校验声明和已安装的标准工具版本，工具执行前再次检查实际包版本。sync 不整体覆盖 package.json，也不恢复或删除业务依赖。TypeScript 配置与 Vite 配置由 sync 生成；doctor 和工程命令拒绝它们的漂移。
 
-## 开发宿主
+## 新增应用和锁文件
 
-Aspire 启动固定 dotnet watch、Vite 和 YARP；不允许自定义启动脚本或应用路径。包装进程只负责让 watch 在终止信号后有界停止及识别异常退出；资源依赖、状态、启动/停止仍归 Aspire 管理。控制入口只绑定 loopback，并校验 256 位随机 checkout 令牌。日志订阅按 Aspire ResourceId，不按显示名称。关键应用进入 Aspire 终止状态时停止整组并返回非零；退出前显式释放 Aspire，再等待所属监听端口关闭。CLI 直接运行已构建的宿主 DLL，取消时保留有界清理时间。
+新增前端的源码、package.json 和 importer 均来自同批标准模板，不能复制已演进 Web 的 importer。锁文件按 YAML 结构处理，支持 pnpm 的多个文档；保留当前所有 importer、已有 package/snapshot 条目与包管理器文档，补入模板缺失的锁定 package/snapshot 节点（包括 peer 和 optional 依赖），添加匹配的新 importer。add 不联网、不重新解析依赖、不安装包。随后运行 init/install 执行冻结安装。
 
-YARP 保留 API 和前端前缀，Vite base 与 Router basename 同步；HMR WebSocket 经统一网关。额外后端不会被公开代理，依赖通过 Yard:Services:<name> 提供。数据和进程身份均由 checkout 绝对路径区分。
+新增后端只生成选定数据库提供程序及一条迁移链。所有新增应用文件、清单、锁文件、同步配置和 checkout 设置先在内存中准备；验证失败不写入。写入期间发生异常时恢复原文件内容、权限并删除本次新增目录。该恢复覆盖命令内的普通 I/O 异常，不承诺断电或强制终止进程时的文件系统事务。
 
-## 秘密与生产
+## 开发宿主和版本
 
-Development 从 .yard/settings.json 加载 checkout 连接和验证码 HMAC 密钥，再读取私有 appsettings.local.json 和环境变量。生产设置必须来自部署环境；不要提交开发配置。Data Protection 密钥目录应使用持久私有卷。Cookie 在生产要求 HTTPS，修改接口检查 CSRF 与公开 Origin；默认仅信任本机反向代理的 forwarded headers；生产容器网络使用 Yard:TrustedProxies 指定实际代理 IP，Host 仅接受 PublicOrigin 对应主机。
+Aspire 管理固定 dotnet watch、直接执行根工具链的 Vite 和 YARP，前端启动不执行项目 dev script，也不安装包。C# 和 Vite 固定轮询，Vite 间隔 250ms。网关保留 API/前端前缀；额外后端仅通过内部地址访问。控制入口绑定 loopback，并校验 checkout 随机令牌；异常退出停止所属整组。退出释放 Aspire 并等待所属端口关闭。
 
-示例变量：Yard__ConnectionString、Yard__VerificationKey（base64 32 字节）、Yard__PublicOrigin、Yard__KeysDirectory、Yard__Mail__Host/Port/Username/Password/FromAddress/FromName/Tls、Yard__GitHub__Enabled/ClientId/ClientSecret。SMTP TLS 固定 StartTls、SslOnConnect，None 仅允许本机测试；正常校验证书。
+checkout 的路径身份隔离端口、连接、数据、控制令牌和所属资源，拒绝复制的 .yard。数据库操作显式执行，dev 不迁移或写种子；db down 保留数据。测试库和 verify 的隔离仓库均位于 .temp。
 
-GitHub 回调：<PublicOrigin>/api/auth/external/github/callback。开发协议测试可使用显式配置的 loopback DevelopmentServer；生产禁止该设置。CI 使用本地协议服务器验证真实 OpenIddict 状态、PKCE、令牌交换、回调和身份操作；不把模拟测试说成持有真实 GitHub 凭据的线上联调。
-
-## 模板与版本
-
-直接模板：dotnet new install /path/Iugam.Yard.Templates.0.1.0.nupkg，然后 dotnet new yard-mono -n Example --database sqlite -o path。安装工具时为其指定同批本地 feed；new 不运行 post action。
-
-sync 使用嵌入 Core 包的固定配置生成受控文件。业务 package.json、Directory.Packages.props 和数据库迁移由项目维护；新增应用只复用模板锁定依赖，不重新解析版本。新增 Yard 版本应显式注册迁移、记录受控文件旧摘要、遇到业务冲突拒绝覆盖；0.1.0 只允许当前版本无变化 no-op，漂移时拒绝覆盖，未知历史一律拒绝。
-
-## 监听范围
-
-Tailwind 关闭自动全仓库扫描；sync 按前端清单生成 sources.css，仅包含声明的前端 src、共享 UI 和平台页面。Vite 固定 250ms 轮询，dotnet watch 固定启用轮询并关闭静态内容处理，避免大量编辑器监听或挂载文件系统导致热更新丢失。该选择依照 [Tailwind 显式源文档](https://tailwindcss.com/docs/detecting-classes-in-source-files)、[Vite watcher 选项](https://vite.dev/config/server-options#server-watch)和 [dotnet watch 环境变量](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-watch#environment-variables)。
+schema 1 在写入前拒绝，不提供 0.1 自动升级。当前版本升级无变化为 no-op；未知路径和受控文件冲突拒绝修改。后续版本必须显式登记工程迁移，业务数据库迁移单独验收。实际 NuGet 分发验证从本地包安装，不以源码 ProjectReference 代替分发链。

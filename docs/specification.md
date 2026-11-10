@@ -24,13 +24,15 @@ Yard 是约定优先的 C# 模块化单体 + React/Vite monorepo 开发工具。
 }
 ```
 
-应用清单是唯一拓扑来源。sync 管理解决方案、workspace、本地工具清单、SDK、工程排版/lint、Vite 和 Tailwind 扫描配置；业务源码、依赖、迁移和测试归项目所有，sync 不覆盖。项目不维护 Taskfile、Procfile 或手写 Aspire AppHost。
+应用清单是唯一拓扑来源。sync 管理解决方案、workspace、本地工具清单、SDK、工程排版/lint、Vite、TypeScript 和 Tailwind 扫描配置；业务源码、业务依赖、迁移和测试归项目所有，sync 不覆盖。根 package.json 的标准工具依赖、Node 和 pnpm 声明由 Yard 校验固定，允许增加业务依赖。项目不维护 Taskfile、Procfile 或手写 Aspire AppHost。
 
 ## 开发工作流
 
 固定 .NET SDK 10.0.400、Node 24.18.0、pnpm 12.11.2、EF 10.0.13、Aspire 13.6.3、YARP 2.3.0。细节见依赖清单。全局 CLI 在仓库中交给固定版本本地工具。
 
 new 只生成文件，非空目录拒绝覆盖。install 恢复锁定依赖、本地工具和忽略的开发宿主/辅助项目。init 幂等准备所属数据库并显式迁移，不写业务数据。dev 可启动所属数据库；检查端口、模型和迁移状态，不安装包、不改锁文件、不迁移、不写种子数据。C# 与 Vite 固定轮询监听，Vite 间隔 250ms。
+
+add frontend 使用同批模板的依赖声明和 importer，结构化合并模板锁定的 package/snapshot 图，保留项目已有依赖和锁定条目，不联网或重新解析版本。新增应用先准备全部文件，普通写入失败恢复清单、锁文件、同步配置、私有设置和新增目录；不承诺强制终止时的文件系统事务。
 
 Aspire + YARP 与控制接口仅存在于开发侧。网关默认 http://localhost:8080，YARD_PORT 覆盖端口；/ 为 Web，/api/ 为主 API，其他前端为 /<name>/。/admin/ 只有声明 admin 应用才有对应前端。额外后端仅通过内部地址访问，Services:<name> 注入其地址。
 
@@ -51,6 +53,8 @@ flush 在每库事务内清空全部应用表和原始 SQL 表，重置所属自
 shell 使用所属容器 psql 或本机 sqlite3，继承终端和输入，保留客户端退出码；不安装客户端、不启动数据库、不隐式创建 SQLite 文件。
 
 fmt 固定 CSharpier → Roslyn whitespace 与前端 Prettier。fmt --check 不改源码。check 包含同步、格式、lint、类型、契约、构建和测试。后端测试使用 .temp 下的隔离数据库，不复用开发库。
+
+前端 dev/build/typecheck/test/lint 由 Yard 直接执行仓库根固定工具链，不委托 package.json scripts；执行前校验实际工具版本。TypeScript/Vite 配置受控，doctor 和工程命令拒绝漂移；doctor 同时核对已安装工具。项目可保留 scripts 供原生命令使用，不能以此改写 Yard 行为。
 
 contracts 通过独立工具导出 OpenAPI，再生成 TypeScript；检查仅比较差异，允许删除示例后的合法空契约。verify 创建 .temp 下隔离副本进行工程、桌面/手机浏览器与生命周期验收，清理所属进程和测试数据库。SQLite 不要求 Docker。
 

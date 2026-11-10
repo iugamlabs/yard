@@ -1,5 +1,24 @@
 # Yard 0.2.0 实现与验收记录
 
+## 2026-10-26 审阅问题修复
+
+按当前 0.2 实现修复。0.1 的组织运行库已删除，当前源码和模板没有 YardDbContext、IOrganizationEntity 或组织保存入口；schema 1 继续在写入前拒绝，没有回改旧版运行库。
+
+- 新增前端使用同批模板的 package.json 与 importer，结构化合并锁定的 package/snapshot 图，保留当前项目已有条目和包管理器文档，不联网或重新解析版本。pnpm 要求首个文档保留显式 `---`，已加入回归。
+- 新增应用先准备清单、源码、锁文件、受控配置和私有设置；写入异常恢复原文件内容、权限并清理新增目录。覆盖前后端写入失败、无效私有设置和无效锁文件，不承诺强制终止时的文件系统事务。
+- 前端 dev/build/typecheck/test/lint 改为直接执行根固定工具，不委托项目 scripts；fmt/contracts 使用同一根工具链。根标准工具声明、已安装版本和其他 workspace 的标准工具覆盖受到检查。TypeScript 配置纳入 sync 管理，业务依赖与 scripts 不被整体覆盖。
+- 新增前端包级验收脚本并接入 CI；修正架构文档遗留的 0.1 描述，生成项目文档说明工具和业务依赖的所有权。
+
+本轮 Linux 实际执行：C# 格式检查通过；`dotnet build Yard.slnx -m:1` 零警告通过；`dotnet test Yard.slnx -m:1` 49 项通过；`python3 scripts/pack.py` 通过。最终包在全新 CLI home 和独立 Yard 包缓存中安装，已确认恢复的 CLI/Core/DotNet/DevHost nupkg 与本地 feed 字节一致。
+
+最终包前端专项验收 36 项、SQLite 双后端/双前端完整验收 61 项、并行 checkout/进程验收 27 项通过。包括真实 Web 依赖变化后的连续新增与冻结安装、替换 scripts 后仍发现实际类型/lint/测试错误及产生构建产物、工具/配置漂移拒绝、失败无残留、桌面/手机浏览器、HMR、生命周期清理和原生发布。索引见 [本轮验收记录](acceptance-2026-10-26.json)。
+
+首次包级验收因 YAML 序列化省略首个文档标记而失败，原始记录保留在 `.temp/frontend-acceptance/301cf1d1/results.json`；修复后从新缓存重跑通过。最终日志和包摘要在 `.temp/review-fixes-20261026-final`。本轮未重跑 PostgreSQL、macOS、Windows 或原生 dotnet 模板安装验收，未执行远程 CI；未修改业务仓库，未发布包。
+
+复现新增专项：`python3 scripts/frontend_acceptance.py --tool <本次安装的 yard>`。安装同版本候选时仍需同时使用新的 DOTNET_CLI_HOME 和 NUGET_PACKAGES，避免工具解析缓存命中旧候选。
+
+## 2026-10-25 交付记录
+
 日期：2026-10-25。Yard 已收敛为 C# 模块化单体 + React/Vite monorepo 开发工具，使用 schema 2。没有修改原业务仓库，没有发布远程包。0.1 实现与旧验收保存在 [历史记录](implementation-0.1.md) 和 Git 历史中。
 
 ## 实现

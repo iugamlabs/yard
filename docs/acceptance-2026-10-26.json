@@ -1,0 +1,85 @@
+{
+  "version": "0.2.0",
+  "schemaVersion": 2,
+  "date": "2026-10-26",
+  "platform": "Linux",
+  "tool": ".temp/review-fixes-20261026-final/tools/yard",
+  "unitTests": {
+    "passed": 49,
+    "failed": 0,
+    "log": ".temp/review-fixes-tests-final.log"
+  },
+  "build": {
+    "passed": true,
+    "warnings": 0,
+    "log": ".temp/review-fixes-build-final.log"
+  },
+  "format": {
+    "passed": true,
+    "log": ".temp/review-fixes-format-check-final.log"
+  },
+  "pack": {
+    "passed": true,
+    "log": ".temp/review-fixes-pack-final.log"
+  },
+  "packages": [
+    {
+      "file": ".temp/feed/Iugam.Yard.Cli.0.2.0.nupkg",
+      "sha256": "54c2c9e1470126113578e24c29678c1bacd6aee236e48ad4c2f7aab23d77acfc",
+      "restoredBytesVerified": true
+    },
+    {
+      "file": ".temp/feed/Iugam.Yard.Core.0.2.0.nupkg",
+      "sha256": "97a9beda990debcbd572a0e16c332f35db3c4aabd685c6410c6fe664511fb657",
+      "restoredBytesVerified": true
+    },
+    {
+      "file": ".temp/feed/Iugam.Yard.DevHost.0.2.0.nupkg",
+      "sha256": "dc8489d6c75bb7e890dfe8169d474bd010267abd2cda980704a29654dea6c638",
+      "restoredBytesVerified": true
+    },
+    {
+      "file": ".temp/feed/Iugam.Yard.DotNet.0.2.0.nupkg",
+      "sha256": "0a233e6b2bc2c656adc7abd810c297396fbb08a33874c41c494397ca705b139c",
+      "restoredBytesVerified": true
+    },
+    {
+      "file": ".temp/feed/Iugam.Yard.Templates.0.2.0.nupkg",
+      "sha256": "f14c08779236a73ee6402d37e4f3d30db004e2ad3d6347cf1386ed3c5d8af390",
+      "restoredBytesVerified": false
+    }
+  ],
+  "cases": [
+    {
+      "name": "frontend",
+      "record": ".temp/frontend-acceptance/29a82bf0/results.json",
+      "passed": true,
+      "checks": 36
+    },
+    {
+      "name": "sqlite-two-backends-two-frontends",
+      "record": ".temp/acceptance/sqlite-530d84d2/results.json",
+      "passed": true,
+      "checks": 61
+    },
+    {
+      "name": "processes",
+      "record": ".temp/process-acceptance/1af59a1a/results.json",
+      "passed": true,
+      "checks": 27
+    }
+  ],
+  "retainedFailedAttempt": {
+    "record": ".temp/frontend-acceptance/301cf1d1/results.json",
+    "reason": "YAML serialization omitted the initial explicit document marker required by pnpm; fixed and verified with fresh caches."
+  },
+  "notExecuted": [
+    "PostgreSQL rerun",
+    "macOS",
+    "Windows",
+    "native dotnet template installation rerun",
+    "remote CI",
+    "business repository migration",
+    "remote package publish"
+  ]
+}

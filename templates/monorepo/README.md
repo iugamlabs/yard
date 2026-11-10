@@ -24,3 +24,5 @@ dotnet publish apps/api/src/YardApp.Api -c Release
 运行 API 时通过标准 `ConnectionStrings__Default` 和 `ASPNETCORE_URLS` 配置数据库及监听地址；数据库应预先应用迁移。后端测试也读取标准连接字符串，使用独立测试库，不要指向开发或生产数据。前端构建使用 `pnpm --dir apps/web build`。
 
 源码、业务依赖和迁移由项目维护。`yard sync` 只更新受控工程配置，`yard add backend/frontend name` 添加标准应用。`.yard` 和 `.temp` 都是本地忽略内容，不能复制到另一 checkout。增加 admin 前端后才有独立 /admin/ 页面。
+
+前端标准工具版本及 TypeScript/Vite 配置由 Yard 管理；可以增加业务依赖，不能用其他版本覆盖标准工具。Yard 直接执行固定工具，不使用项目 scripts 改写标准命令。新增前端使用模板自己的依赖和锁定图，不复制 Web 的业务依赖；失败会恢复本次文件变更。
