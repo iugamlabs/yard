@@ -83,17 +83,25 @@ public static class DevelopmentHost {
                 }
         foreach (var name in selected.Where(w.Definition.Frontends.Contains)) {
             var front = builder
-                .AddViteApp(name, w.AppDirectory(name))
-                .WithPnpm(install: false)
+                .AddExecutable(
+                    name,
+                    "node",
+                    w.AppDirectory(name),
+                    FrontendToolchain.Entrypoint(w, "vite", "bin/vite.js"),
+                    "--config",
+                    "vite.config.ts",
+                    "--host",
+                    "127.0.0.1",
+                    "--strictPort",
+                    "--port",
+                    settings.Ports[name].ToString()
+                )
                 .WithEnvironment("YARD_BASE_PATH", name == "web" ? "/" : "/" + name + "/")
                 .WithEnvironment("YARD_GATEWAY_PORT", gatewayPort.ToString())
-                .WithEndpoint(
-                    "http",
-                    e => {
-                        e.Port = settings.Ports[name];
-                        e.TargetPort = settings.Ports[name];
-                        e.IsProxied = false;
-                    }
+                .WithHttpEndpoint(
+                    port: settings.Ports[name],
+                    targetPort: settings.Ports[name],
+                    isProxied: false
                 );
             if (backends.TryGetValue("api", out var api))
                 front.WaitFor(api);
