@@ -5,4 +5,6 @@
 <EmbeddedResource Include="../../templates/monorepo/.prettierrc.json" LogicalName="Yard.Managed/.prettierrc.json"/>
 <EmbeddedResource Include="../../templates/monorepo/.prettierignore" LogicalName="Yard.Managed/.prettierignore"/>
 <EmbeddedResource Include="../../templates/monorepo/eslint.config.js" LogicalName="Yard.Managed/eslint.config.js"/>
+<EmbeddedResource Include="../../templates/monorepo/package.json" LogicalName="Yard.Frontend/package.json"/>
+<EmbeddedResource Include="../../templates/monorepo/apps/web/tsconfig.json" LogicalName="Yard.Frontend/tsconfig.json"/>
 </ItemGroup></Project>

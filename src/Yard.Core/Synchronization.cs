@@ -4,7 +4,10 @@ using System.Xml.Linq;
 namespace Yard;
 
 public static class Synchronization {
-    public static Dictionary<string, string> Expected(Workspace w) {
+    public static Dictionary<string, string> Expected(
+        Workspace w,
+        IReadOnlySet<string>? pendingFiles = null
+    ) {
         var definition = w.Definition;
         var solution = new XElement("Solution");
         foreach (var app in definition.Backends) {
@@ -19,7 +22,7 @@ public static class Synchronization {
             );
             var test =
                 $"apps/{app}/tests/{w.ProjectName(app)}.Tests/{w.ProjectName(app)}.Tests.csproj";
-            if (File.Exists(Path.Combine(w.Root, test)))
+            if (File.Exists(Path.Combine(w.Root, test)) || pendingFiles?.Contains(test) == true)
                 solution.Add(new XElement("Project", new XAttribute("Path", test)));
         }
         var tools = new {
@@ -50,7 +53,8 @@ public static class Synchronization {
             using var reader = new StreamReader(assembly.GetManifestResourceStream(name)!);
             result[name["Yard.Managed/".Length..]] = reader.ReadToEnd();
         }
-        foreach (var frontend in definition.Frontends)
+        foreach (var frontend in definition.Frontends) {
+            result[$"apps/{frontend}/tsconfig.json"] = FrontendToolchain.TypeScriptConfig;
             result[$"apps/{frontend}/vite.config.ts"] =
                 frontend == "web"
                     ? ViteConfig
@@ -58,6 +62,7 @@ public static class Synchronization {
                         "base: process.env.YARD_BASE_PATH ?? '/'",
                         $"base: process.env.YARD_BASE_PATH ?? '/{frontend}/'"
                     );
+        }
         return result;
     }
 
