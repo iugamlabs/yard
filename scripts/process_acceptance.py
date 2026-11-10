@@ -61,6 +61,10 @@ try:
     for i, app in enumerate(apps):
         run('new-' + str(i), ROOT, 'new', 'ParallelProject', '--database', 'sqlite', '--output', str(app))
         run('init-' + str(i), app, 'init')
+        package_file = app / 'apps/web/package.json'
+        package = json.loads(package_file.read_text())
+        package['scripts']['dev'] = 'node -e "process.exit(23)"'
+        package_file.write_text(json.dumps(package, indent=2) + '\n')
     settings = [json.loads((a / '.yard/settings.json').read_text()) for a in apps]
     record('separate-identities', settings[0]['identity'] != settings[1]['identity'])
     record('separate-databases', settings[0]['connections']['api'] != settings[1]['connections']['api'])
@@ -82,6 +86,20 @@ try:
     for url, host in zip(urls, hosts):
         ready(url, host)
     record('parallel-ready', True)
+    for i, url in enumerate(urls):
+        vite_ready = False
+        for _ in range(60):
+            if hosts[i].poll() is not None:
+                break
+            try:
+                with urllib.request.urlopen(url + '/@vite/client', timeout=1) as response:
+                    vite_ready = response.status == 200 and b'createHotContext' in response.read()
+                if vite_ready:
+                    break
+            except Exception:
+                pass
+            time.sleep(.25)
+        record('vite-ignores-custom-dev-script-' + str(i), vite_ready)
     try:
         status = urllib.request.urlopen(urls[0] + '/admin/', timeout=5).status
     except urllib.error.HTTPError as error:

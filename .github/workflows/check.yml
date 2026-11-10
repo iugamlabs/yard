@@ -32,6 +32,7 @@ jobs:
       - run: npm install -g pnpm@12.11.2
       - run: python3 scripts/pack.py
       - run: dotnet tool install Iugam.Yard.Cli --version 0.2.0 --tool-path .temp/tools --add-source .temp/feed
+      - run: python3 scripts/frontend_acceptance.py --tool .temp/tools/yard
       - run: python3 scripts/acceptance.py --tool .temp/tools/yard --database sqlite
       - run: python3 scripts/acceptance.py --tool .temp/tools/yard --database postgresql --multi
       - run: python3 scripts/acceptance.py --tool .temp/tools/yard --database sqlite --backends 2 --frontends 2 --skip-browser
@@ -53,3 +54,5 @@ jobs:
             .temp/acceptance/*/logs/*.log
             .temp/process-acceptance/*/results.json
             .temp/process-acceptance/*/*.log
+            .temp/frontend-acceptance/*/results.json
+            .temp/frontend-acceptance/*/logs/*.log
