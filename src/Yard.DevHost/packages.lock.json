@@ -348,11 +348,6 @@
         "resolved": "10.0.12",
         "contentHash": "jDix4bBMYnpZdSPcnY+KDV6ik3SRMzpMKby/bZl/XUwIiflwRNAFZ0oOl61R/pSaveIJ8t1gs2BUlrGsPs/bcg=="
       },
-      "YamlDotNet": {
-        "type": "Transitive",
-        "resolved": "18.1.0",
-        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
-      },
       "Iugam.Yard.Core": {
         "type": "Project",
         "dependencies": {
@@ -364,6 +359,12 @@
         "requested": "[3.10.5, )",
         "resolved": "3.10.5",
         "contentHash": "L5SghZThsAVhV8ucwwW5FLMzKj1Ps57JB8DM2bEjpBNTyGi1EDjDO7Mi39Yx1FoXM2fZ1l9j39xqlPsZI1QCJQ=="
+      },
+      "YamlDotNet": {
+        "type": "CentralTransitive",
+        "requested": "[18.1.0, )",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
       }
     }
   }

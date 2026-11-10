@@ -48,7 +48,16 @@ public sealed record LocalSettings {
     }
 
     public static LocalSettings Configure(Workspace w) {
+        var settings = Plan(w);
         Directory.CreateDirectory(w.State);
+        Directory.CreateDirectory(System.IO.Path.Combine(w.State, "data"));
+        File.WriteAllText(PathFor(w), JsonSerializer.Serialize(settings, Workspace.Json) + "\n");
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(PathFor(w), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        return settings;
+    }
+
+    public static LocalSettings Plan(Workspace w) {
         var existing = File.Exists(PathFor(w)) ? Load(w) : null;
         if (existing != null && existing.Identity != w.Identity)
             throw new YardException(
@@ -69,7 +78,6 @@ public sealed record LocalSettings {
                     ? $"Data Source={System.IO.Path.Combine(w.State, "data", app + ".db")};Foreign Keys=True;Default Timeout=30"
                     : $"Host=127.0.0.1;Port={dbPort};Database=yard_{app.Replace('-', '_')};Username=yard;Password={password}";
         }
-        Directory.CreateDirectory(System.IO.Path.Combine(w.State, "data"));
         var settings = new LocalSettings {
             Identity = w.Identity,
             Database = w.Definition.Database,
@@ -85,9 +93,6 @@ public sealed record LocalSettings {
             DatabasePassword = password,
             DatabasePort = dbPort,
         };
-        File.WriteAllText(PathFor(w), JsonSerializer.Serialize(settings, Workspace.Json) + "\n");
-        if (!OperatingSystem.IsWindows())
-            File.SetUnixFileMode(PathFor(w), UnixFileMode.UserRead | UnixFileMode.UserWrite);
         return settings;
     }
 }

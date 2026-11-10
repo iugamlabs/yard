@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.TemplateEngine.Abstractions.Installer;
 using Microsoft.TemplateEngine.Edge;
 using Microsoft.TemplateEngine.Edge.Settings;
@@ -78,8 +79,9 @@ public static class Templates {
         var next = new Workspace(w.Root, d);
         next.Validate();
         var target = next.AppDirectory(name);
-        if (Directory.Exists(target))
+        if (Directory.Exists(target) || File.Exists(target))
             throw new YardException("Application directory already exists.", 2);
+        var files = new Dictionary<string, string>();
         var source = Path.Combine(Root, "apps", kind == "backend" ? "api" : "web");
         var sources =
             kind == "backend"
@@ -118,28 +120,21 @@ public static class Templates {
                     );
                 if (kind == "frontend" && Path.GetFileName(file) == "package.json")
                     text = text.Replace("/web\"", "/" + name + "\"");
-                var p = Path.Combine(target, relative);
-                Directory.CreateDirectory(Path.GetDirectoryName(p)!);
-                File.WriteAllText(p, text);
+                files[$"apps/{name}/" + relative.Replace('\\', '/')] = text;
             }
         if (kind == "frontend") {
-            var lockfile = Path.Combine(w.Root, "pnpm-lock.yaml");
-            var locked = File.ReadAllText(lockfile);
-            var marker = "  apps/web:\n";
-            var start = locked.IndexOf(marker, StringComparison.Ordinal);
-            if (start < 0)
-                throw new YardException("Missing web importer in pnpm-lock.yaml.");
-            var end = locked.IndexOf("\n  ", start + marker.Length, StringComparison.Ordinal);
-            while (end >= 0 && end + 3 < locked.Length && locked[end + 3] == ' ')
-                end = locked.IndexOf("\n  ", end + 1, StringComparison.Ordinal);
-            if (end < 0)
-                throw new YardException("Invalid workspace lockfile.");
-            var block = locked[start..end].Replace("  apps/web:", "  apps/" + name + ":");
-            File.WriteAllText(lockfile, locked.Insert(end, "\n" + block));
+            files["pnpm-lock.yaml"] = PnpmLockfile.AddFrontend(
+                File.ReadAllText(Path.Combine(w.Root, "pnpm-lock.yaml")),
+                File.ReadAllText(Path.Combine(Root, "pnpm-lock.yaml")),
+                name
+            );
         }
-        next.Save();
-        Synchronization.Apply(next, false);
+        files["yard.json"] = JsonSerializer.Serialize(next.Definition, Workspace.Json) + "\n";
+        foreach (var (path, content) in Synchronization.Expected(next, files.Keys.ToHashSet()))
+            files[path] = content;
         if (File.Exists(LocalSettings.PathFor(w)))
-            LocalSettings.Configure(next);
+            files[".yard/settings.json"] =
+                JsonSerializer.Serialize(LocalSettings.Plan(next), Workspace.Json) + "\n";
+        WorkspaceWrites.Apply(w.Root, files);
     }
 }
